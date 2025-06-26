@@ -8,7 +8,15 @@
     "dev": "nodemon src/server.js",
     "init-learning": "node src/utils/initializeLearning.js",
     "test-prediction": "node src/utils/testPrediction.js",
-    "reset-learning": "node -e \"require('mongoose').connect(process.env.MONGODB_URI).then(async () => { await require('./src/models/VendorMapping').deleteMany({}); console.log('Learning data reset'); process.exit(0); })\""
+    "reset-learning": "node -e \"require('mongoose').connect(process.env.MONGODB_URI).then(async () => { await require('./src/models/VendorMapping').deleteMany({}); console.log('Learning data reset'); process.exit(0); })\"",
+    "cleanup": "node cleanup.js",
+    "cleanup:confirm": "node cleanup.js --confirm",
+    "cleanup:dry-run": "node cleanup.js --dry-run",
+    "cleanup:keep-files": "node cleanup.js --confirm --keep-uploads",
+    "cleanup:help": "node cleanup.js --help",
+    "reset:complete": "node cleanup.js --confirm",
+    "reset:db-only": "node cleanup.js --confirm --keep-uploads",
+    "reset:preview": "node cleanup.js --dry-run"
   },
   "author": "",
   "license": "ISC",

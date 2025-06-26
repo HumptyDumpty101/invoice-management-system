@@ -200,10 +200,19 @@ export default function InvoiceEditPage({ params }) {
 
     setValidationErrors(errors);
 
-    // CHANGED: Show warnings as toast messages instead of blocking
+    // FIXED: Use toast methods that actually exist in react-hot-toast
     if (warnings.length > 0) {
       warnings.forEach((warning) => {
-        toast.warning(warning, { duration: 4000 });
+        // Use toast.error with custom styling or toast() with options instead of toast.warning
+        toast(warning, {
+          duration: 4000,
+          icon: "⚠️",
+          style: {
+            background: "#fef3c7",
+            color: "#92400e",
+            border: "1px solid #f59e0b",
+          },
+        });
       });
     }
 
