@@ -80,8 +80,7 @@ async function extractFromScannedPDF(filePath) {
   const startTime = Date.now();
 
   try {
-    // For now, use Tesseract directly on the PDF
-    // In production, you'd convert PDF pages to images first
+    // Create worker without logger to avoid cloning issues
     const worker = await createWorker();
 
     await worker.loadLanguage("eng");
@@ -141,13 +140,8 @@ async function extractFromImage(filePath) {
     // Pre-process image for better OCR results
     const processedImagePath = await preprocessImage(filePath);
 
-    const worker = await createWorker({
-      logger: (m) => {
-        if (m.status === "recognizing text") {
-          console.log(`OCR Progress: ${Math.round(m.progress * 100)}%`);
-        }
-      },
-    });
+    // Create worker without logger function to avoid DataCloneError
+    const worker = await createWorker();
 
     await worker.loadLanguage("eng");
     await worker.initialize("eng");
@@ -160,9 +154,18 @@ async function extractFromImage(filePath) {
       preserve_interword_spaces: "1",
     });
 
+    console.log(`Starting OCR processing for: ${path.basename(filePath)}`);
+
     const {
       data: { text, confidence, words },
     } = await worker.recognize(processedImagePath);
+
+    console.log(
+      `OCR completed for: ${path.basename(
+        filePath
+      )} - Confidence: ${confidence}%`
+    );
+
     await worker.terminate();
 
     // Clean up processed image if different from original
