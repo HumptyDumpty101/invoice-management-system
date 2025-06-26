@@ -1,0 +1,284 @@
+/* frontend/app/globals.css */
+@import "tailwindcss";
+
+/* Tailwind v4 Custom Theme - Light Mode Only */
+@theme {
+  --color-border: #e5e7eb;
+  --color-input: #ffffff;
+  --color-ring: #3b82f6;
+  --color-background: #ffffff;
+  --color-foreground: #111827;
+
+  --color-primary: #3b82f6;
+  --color-primary-foreground: #ffffff;
+
+  --color-secondary: #f3f4f6;
+  --color-secondary-foreground: #111827;
+
+  --color-destructive: #ef4444;
+  --color-destructive-foreground: #ffffff;
+
+  --color-muted: #f3f4f6;
+  --color-muted-foreground: #6b7280;
+
+  --color-accent: #f3f4f6;
+  --color-accent-foreground: #111827;
+
+  --radius: 0.5rem;
+}
+
+/* Dark Mode Variables - Outside @theme */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-background: #0a0a0a;
+    --color-foreground: #ededed;
+    --color-border: #27272a;
+    --color-input: #27272a;
+    --color-muted: #27272a;
+    --color-muted-foreground: #a1a1aa;
+    --color-accent: #27272a;
+    --color-secondary: #27272a;
+  }
+}
+
+/* Base Styles */
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+      Roboto, sans-serif;
+  }
+}
+
+/* Component Styles */
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center rounded-md text-sm font-medium;
+    @apply transition-colors focus-visible:outline-none focus-visible:ring-2;
+    @apply focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none;
+    transition-property: color, background-color, border-color,
+      text-decoration-color, fill, stroke;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 150ms;
+  }
+
+  .btn-primary {
+    @apply btn bg-blue-600 text-white hover:bg-blue-700 h-10 py-2 px-4;
+  }
+
+  .btn-secondary {
+    @apply btn bg-gray-200 text-gray-900 hover:bg-gray-300 h-10 py-2 px-4;
+    @apply dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600;
+  }
+
+  .btn-outline {
+    @apply btn border border-gray-300 bg-transparent hover:bg-gray-50 h-10 py-2 px-4;
+    @apply dark:border-gray-600 dark:hover:bg-gray-800;
+  }
+
+  .btn-danger {
+    @apply btn bg-red-600 text-white hover:bg-red-700 h-10 py-2 px-4;
+  }
+
+  .card {
+    @apply bg-white rounded-lg border border-gray-200 shadow-sm;
+    @apply dark:bg-gray-800 dark:border-gray-700;
+  }
+
+  .input {
+    @apply flex h-10 w-full rounded-md border border-gray-300 bg-transparent;
+    @apply py-2 px-3 text-sm placeholder:text-gray-400;
+    @apply focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent;
+    @apply disabled:cursor-not-allowed disabled:opacity-50;
+    @apply dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100;
+  }
+
+  .label {
+    @apply text-sm font-medium leading-none;
+    @apply peer-disabled:cursor-not-allowed peer-disabled:opacity-70;
+  }
+
+  .select {
+    @apply input pr-8 cursor-pointer;
+  }
+
+  .badge {
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
+    transition: all 0.15s ease-in-out;
+  }
+
+  .badge-success {
+    @apply badge bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200;
+  }
+
+  .badge-warning {
+    @apply badge bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200;
+  }
+
+  .badge-error {
+    @apply badge bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200;
+  }
+
+  .badge-info {
+    @apply badge bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200;
+  }
+
+  .spinner {
+    @apply animate-spin rounded-full border-2 border-current border-t-transparent;
+  }
+
+  .confidence-bar {
+    @apply w-full bg-gray-200 rounded-full h-2 dark:bg-gray-700;
+  }
+
+  .confidence-fill {
+    @apply h-2 rounded-full transition-all duration-300;
+  }
+
+  .confidence-high {
+    @apply bg-green-500;
+  }
+
+  .confidence-medium {
+    @apply bg-yellow-500;
+  }
+
+  .confidence-low {
+    @apply bg-red-500;
+  }
+
+  /* Upload Zone */
+  .upload-zone {
+    @apply border-2 border-dashed border-gray-300 rounded-lg p-8 text-center;
+    @apply transition-colors duration-200;
+    @apply dark:border-gray-600;
+  }
+
+  .upload-zone.active {
+    @apply border-blue-500 bg-blue-50 dark:border-blue-400 dark:bg-blue-900/20;
+  }
+
+  .upload-zone:hover {
+    @apply border-gray-400 bg-gray-50 dark:border-gray-500 dark:bg-gray-800;
+  }
+
+  /* Validation Indicators */
+  .validation-indicator {
+    @apply inline-flex items-center space-x-1;
+  }
+
+  .validation-valid {
+    @apply text-green-600 dark:text-green-400;
+  }
+
+  .validation-invalid {
+    @apply text-red-600 dark:text-red-400;
+  }
+
+  .validation-warning {
+    @apply text-yellow-600 dark:text-yellow-400;
+  }
+}
+
+/* Utility Classes */
+@layer utilities {
+  .text-gradient {
+    background: linear-gradient(to right, #3b82f6, #8b5cf6);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .animate-fade-in {
+    animation: fadeIn 0.5s ease-in-out;
+  }
+
+  .animate-slide-up {
+    animation: slideUp 0.3s ease-out;
+  }
+
+  .animate-pulse-soft {
+    animation: pulseSoft 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+}
+
+/* Custom Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulseSoft {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* Mobile Responsive */
+@media (max-width: 640px) {
+  .container {
+    @apply px-2;
+  }
+
+  .card {
+    @apply mx-2;
+  }
+
+  .btn {
+    @apply text-xs px-3 py-2;
+  }
+}
+
+/* Print Styles */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  .card {
+    @apply shadow-none border border-gray-300;
+  }
+}
