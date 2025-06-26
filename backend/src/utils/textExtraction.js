@@ -246,7 +246,7 @@ function calculatePDFConfidence(text) {
   let confidence = 85; // Start lower than before since we now have OCR comparison
 
   // Check for common OCR artifacts that shouldn't be in clean PDF text
-  const ocrArtifacts = /[|]{2,}|_{3,}|\.{4,}|[^\w\s$.,/:-#()]/g;
+  const ocrArtifacts = /[|]{2,}|_{3,}|\.{4,}|[^\w\s$.,\/:#()\-\[\]]/g;
   if (ocrArtifacts.test(text)) {
     confidence -= 15;
   }

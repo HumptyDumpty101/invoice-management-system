@@ -34,10 +34,10 @@ app.use("/uploads", express.static("uploads"));
 
 // Routes
 // TODO:
-// app.use('/api/upload', require('./routes/upload'));
-// app.use('/api/invoices', require('./routes/invoices'));
-// app.use('/api/categories', require('./routes/categories'));
-// app.use('/api/dashboard', require('./routes/dashboard'));
+app.use("/api/upload", require("./routes/upload"));
+app.use("/api/invoices", require("./routes/invoices"));
+app.use("/api/categories", require("./routes/categories"));
+app.use("/api/dashboard", require("./routes/dashboard"));
 
 // Health Check Endpoint
 app.get("/api/health", (req, res) => {
