@@ -1,4 +1,4 @@
-// backend/routes/upload.js
+// backend/src/routes/upload.js
 const express = require("express");
 const multer = require("multer");
 const path = require("path");
@@ -10,6 +10,7 @@ const {
 const { parseInvoiceData, extractMetadata } = require("../utils/dataParser");
 const { validateInvoiceData } = require("../utils/validation");
 const Invoice = require("../models/Invoice");
+const VendorMapping = require("../models/VendorMapping");
 
 const router = express.Router();
 
@@ -231,6 +232,24 @@ async function processInvoiceFile(file) {
 
   await invoice.save();
 
+  // Step 9: Update learning system (only if prediction was confident and not a duplicate)
+  if (
+    categoryPrediction &&
+    categoryPrediction.confidence >= 60 &&
+    !invoice.isDuplicate
+  ) {
+    try {
+      await VendorMapping.updateMapping(
+        parsedData.vendor,
+        categoryPrediction.category,
+        parsedData.amount,
+        false // Not user corrected - this is auto-assigned
+      );
+    } catch (error) {
+      console.error("Failed to update learning system:", error);
+    }
+  }
+
   return {
     id: invoice._id,
     vendor: invoice.vendor,
@@ -248,49 +267,161 @@ async function processInvoiceFile(file) {
 }
 
 /**
- * Simple category prediction based on vendor
- * This will be enhanced with a proper learning system
+ * Enhanced category prediction using learning system
  */
 async function predictCategory(vendor, amount) {
-  // Simple rule-based prediction for demo
-  const vendorLower = vendor.toLowerCase();
+  try {
+    // First check learning system
+    const learnedPrediction = await VendorMapping.predictCategory(
+      vendor,
+      amount
+    );
 
-  const predictions = {
-    amazon: { category: "5010", name: "Office Supplies", confidence: 85 },
-    uber: { category: "5040", name: "Travel & Transportation", confidence: 90 },
-    starbucks: {
-      category: "5050",
-      name: "Meals & Entertainment",
-      confidence: 80,
-    },
-    "office depot": {
-      category: "5010",
-      name: "Office Supplies",
-      confidence: 95,
-    },
-    walmart: { category: "5010", name: "Office Supplies", confidence: 70 },
-    target: { category: "5010", name: "Office Supplies", confidence: 70 },
-    "best buy": { category: "5060", name: "Technology", confidence: 85 },
-    "home depot": {
-      category: "5070",
-      name: "Maintenance & Repairs",
-      confidence: 85,
-    },
-  };
+    if (learnedPrediction) {
+      console.log(
+        `Learned prediction for ${vendor}: ${learnedPrediction.category} (${learnedPrediction.confidence}%)`
+      );
 
-  for (const [vendor_key, prediction] of Object.entries(predictions)) {
-    if (vendorLower.includes(vendor_key)) {
-      return prediction;
+      // Get category details
+      const { defaultCategories } = require("./categories");
+      const category = defaultCategories.find(
+        (c) => c.code === learnedPrediction.category
+      );
+
+      return {
+        category: learnedPrediction.category,
+        name: category ? category.name : "Unknown Category",
+        confidence: learnedPrediction.confidence,
+        reason: learnedPrediction.reason,
+        alternatives: learnedPrediction.alternatives,
+      };
     }
-  }
 
-  // Default prediction based on amount ranges
-  if (amount < 20) {
-    return { category: "5050", name: "Meals & Entertainment", confidence: 60 };
-  } else if (amount < 100) {
-    return { category: "5010", name: "Office Supplies", confidence: 50 };
-  } else {
-    return { category: "5060", name: "Professional Services", confidence: 40 };
+    // No learned mapping - use simple rule-based prediction
+    console.log(
+      `No learned mapping for ${vendor}, using rule-based prediction`
+    );
+
+    const vendorLower = vendor.toLowerCase();
+
+    // Rule-based predictions for common vendors
+    const predictions = {
+      // High confidence software/subscriptions
+      midjourney: {
+        category: "5020",
+        name: "Software Subscriptions",
+        confidence: 90,
+      },
+      openai: {
+        category: "5020",
+        name: "Software Subscriptions",
+        confidence: 90,
+      },
+      anthropic: {
+        category: "5020",
+        name: "Software Subscriptions",
+        confidence: 90,
+      },
+      adobe: {
+        category: "5020",
+        name: "Software Subscriptions",
+        confidence: 90,
+      },
+      microsoft: {
+        category: "5020",
+        name: "Software Subscriptions",
+        confidence: 85,
+      },
+      slack: {
+        category: "5020",
+        name: "Software Subscriptions",
+        confidence: 85,
+      },
+      zoom: {
+        category: "5020",
+        name: "Software Subscriptions",
+        confidence: 85,
+      },
+
+      // Transportation
+      uber: {
+        category: "5040",
+        name: "Travel & Transportation",
+        confidence: 90,
+      },
+      lyft: {
+        category: "5040",
+        name: "Travel & Transportation",
+        confidence: 90,
+      },
+
+      // Food
+      starbucks: {
+        category: "5050",
+        name: "Meals & Entertainment",
+        confidence: 80,
+      },
+
+      // Retail/Office
+      amazon: { category: "5010", name: "Office Supplies", confidence: 50 },
+      walmart: { category: "5010", name: "Office Supplies", confidence: 60 },
+      target: { category: "5010", name: "Office Supplies", confidence: 60 },
+      "office depot": {
+        category: "5010",
+        name: "Office Supplies",
+        confidence: 85,
+      },
+      staples: { category: "5010", name: "Office Supplies", confidence: 85 },
+      "best buy": {
+        category: "5100",
+        name: "Equipment & Technology",
+        confidence: 80,
+      },
+      "home depot": {
+        category: "5110",
+        name: "Maintenance & Repairs",
+        confidence: 80,
+      },
+    };
+
+    // Check for exact or partial matches
+    for (const [vendor_key, prediction] of Object.entries(predictions)) {
+      if (vendorLower.includes(vendor_key)) {
+        return prediction;
+      }
+    }
+
+    // Default prediction based on amount ranges (very low confidence)
+    if (amount < 20) {
+      return {
+        category: "5050",
+        name: "Meals & Entertainment",
+        confidence: 25,
+        reason: "Unknown vendor with small amount - please verify category",
+      };
+    } else if (amount < 100) {
+      return {
+        category: "5010",
+        name: "Office Supplies",
+        confidence: 25,
+        reason: "Unknown vendor with medium amount - please verify category",
+      };
+    } else {
+      return {
+        category: "5060",
+        name: "Professional Services",
+        confidence: 20,
+        reason: "Unknown vendor with large amount - please verify category",
+      };
+    }
+  } catch (error) {
+    console.error("Category prediction error:", error);
+    return {
+      category: "5140",
+      name: "Miscellaneous Expenses",
+      confidence: 20,
+      reason: "Prediction error - please select category manually",
+    };
   }
 }
 

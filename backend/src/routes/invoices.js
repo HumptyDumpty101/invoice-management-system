@@ -1,5 +1,6 @@
 const express = require("express");
 const Invoice = require("../models/Invoice");
+const VendorMapping = require("../models/VendorMapping");
 const { validateInvoiceUpdate } = require("../utils/validation");
 
 const router = express.Router();
@@ -146,7 +147,7 @@ router.get("/:id", async (req, res) => {
 });
 
 /**
- * PUT /api/invoices/:id - Update invoice
+ * PUT /api/invoices/:id - Update invoice with learning
  */
 router.put("/:id", async (req, res) => {
   try {
@@ -170,6 +171,7 @@ router.put("/:id", async (req, res) => {
 
     // Track if user made corrections
     const wasUserCorrected = invoice.userCorrected;
+    const previousCategory = invoice.category;
     const hasChanges = Object.keys(validation.data).some((key) => {
       if (key === "extractedData") {
         return (
@@ -185,9 +187,48 @@ router.put("/:id", async (req, res) => {
       // Update learning system if category changed
       if (
         validation.data.category &&
-        validation.data.category !== invoice.category
+        validation.data.category !== previousCategory
       ) {
-        await updateVendorLearning(invoice.vendor, validation.data.category);
+        // This is a user correction - very important for learning!
+        await updateVendorLearning(
+          invoice.vendor,
+          validation.data.category,
+          invoice.amount,
+          true // User corrected
+        );
+
+        console.log(
+          `User corrected category for ${invoice.vendor}: ${previousCategory} -> ${validation.data.category}`
+        );
+
+        // Optionally, reduce confidence for the previous incorrect category
+        const normalizedVendor = invoice.vendor
+          .toLowerCase()
+          .replace(/[^a-z0-9\s]/g, "")
+          .replace(/\s+/g, " ")
+          .trim();
+
+        await VendorMapping.updateMany(
+          {
+            normalizedVendor: normalizedVendor,
+            category: previousCategory,
+          },
+          {
+            $mul: { confidence: 0.8 }, // Reduce confidence by 20% for wrong category
+            $inc: { userCorrections: -1 }, // Track that this was wrong
+          }
+        );
+      }
+
+      // Update vendor name if changed
+      if (validation.data.vendor && validation.data.vendor !== invoice.vendor) {
+        // Learn the new vendor-category mapping
+        await updateVendorLearning(
+          validation.data.vendor,
+          validation.data.category || invoice.category,
+          validation.data.amount || invoice.amount,
+          true
+        );
       }
     }
 
@@ -412,16 +453,25 @@ router.post("/bulk-action", async (req, res) => {
 /**
  * Helper function to update vendor learning system
  */
-async function updateVendorLearning(vendor, category) {
-  // This would be implemented with a proper learning database
-  // For now, we'll log the learning event
-  console.log(`Learning: ${vendor} -> ${category}`);
-
-  // In a full implementation, you'd:
-  // 1. Find or create vendor mapping record
-  // 2. Increment usage count
-  // 3. Update confidence scores
-  // 4. Handle conflicting categorizations
+async function updateVendorLearning(
+  vendor,
+  category,
+  amount,
+  isUserCorrected = true
+) {
+  try {
+    await VendorMapping.updateMapping(
+      vendor,
+      category,
+      amount,
+      isUserCorrected
+    );
+    console.log(
+      `Learning updated: ${vendor} -> ${category} (user corrected: ${isUserCorrected})`
+    );
+  } catch (error) {
+    console.error("Failed to update learning system:", error);
+  }
 }
 
 /**
