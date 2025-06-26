@@ -1,4 +1,3 @@
-// backend/src/routes/upload.js
 const express = require("express");
 const multer = require("multer");
 const path = require("path");
@@ -194,7 +193,7 @@ async function processInvoiceFile(file) {
     vendor: parsedData.vendor,
     date: parsedData.date,
     amount: parsedData.amount,
-    category: categoryPrediction ? categoryPrediction.category : "5000", // Default category
+    category: categoryPrediction ? categoryPrediction.category : "5140", // Default category
     categoryConfidence: categoryPrediction ? categoryPrediction.confidence : 0,
     rawText: extraction.text,
     extractedData: {
@@ -235,7 +234,7 @@ async function processInvoiceFile(file) {
   // Step 9: Update learning system (only if prediction was confident and not a duplicate)
   if (
     categoryPrediction &&
-    categoryPrediction.confidence >= 60 &&
+    categoryPrediction.confidence >= 50 && // Lowered threshold
     !invoice.isDuplicate
   ) {
     try {
@@ -267,7 +266,7 @@ async function processInvoiceFile(file) {
 }
 
 /**
- * Enhanced category prediction using learning system
+ * Enhanced category prediction using learning system - REMOVED ALL AMOUNT RESTRICTIONS
  */
 async function predictCategory(vendor, amount) {
   try {
@@ -277,7 +276,8 @@ async function predictCategory(vendor, amount) {
       amount
     );
 
-    if (learnedPrediction) {
+    if (learnedPrediction && learnedPrediction.confidence >= 40) {
+      // Lowered threshold
       console.log(
         `Learned prediction for ${vendor}: ${learnedPrediction.category} (${learnedPrediction.confidence}%)`
       );
@@ -297,30 +297,40 @@ async function predictCategory(vendor, amount) {
       };
     }
 
-    // No learned mapping - use simple rule-based prediction
+    // No learned mapping - use enhanced rule-based prediction
     console.log(
       `No learned mapping for ${vendor}, using rule-based prediction`
     );
 
     const vendorLower = vendor.toLowerCase();
 
-    // Rule-based predictions for common vendors
+    // Enhanced rule-based predictions - REMOVED all amount restrictions
     const predictions = {
       // High confidence software/subscriptions
       midjourney: {
         category: "5020",
         name: "Software Subscriptions",
-        confidence: 90,
+        confidence: 95,
       },
       openai: {
         category: "5020",
         name: "Software Subscriptions",
-        confidence: 90,
+        confidence: 95,
       },
       anthropic: {
         category: "5020",
         name: "Software Subscriptions",
-        confidence: 90,
+        confidence: 95,
+      },
+      chatgpt: {
+        category: "5020",
+        name: "Software Subscriptions",
+        confidence: 95,
+      },
+      claude: {
+        category: "5020",
+        name: "Software Subscriptions",
+        confidence: 95,
       },
       adobe: {
         category: "5020",
@@ -330,90 +340,472 @@ async function predictCategory(vendor, amount) {
       microsoft: {
         category: "5020",
         name: "Software Subscriptions",
-        confidence: 85,
+        confidence: 90,
       },
       slack: {
         category: "5020",
         name: "Software Subscriptions",
-        confidence: 85,
+        confidence: 90,
       },
       zoom: {
+        category: "5020",
+        name: "Software Subscriptions",
+        confidence: 90,
+      },
+      dropbox: {
+        category: "5020",
+        name: "Software Subscriptions",
+        confidence: 85,
+      },
+      github: {
+        category: "5020",
+        name: "Software Subscriptions",
+        confidence: 85,
+      },
+      notion: {
+        category: "5020",
+        name: "Software Subscriptions",
+        confidence: 85,
+      },
+      figma: {
+        category: "5020",
+        name: "Software Subscriptions",
+        confidence: 85,
+      },
+      netlify: {
+        category: "5020",
+        name: "Software Subscriptions",
+        confidence: 85,
+      },
+      vercel: {
         category: "5020",
         name: "Software Subscriptions",
         confidence: 85,
       },
 
-      // Transportation
+      // Cloud Services
+      aws: {
+        category: "5020",
+        name: "Software Subscriptions",
+        confidence: 95,
+      },
+      "amazon web services": {
+        category: "5020",
+        name: "Software Subscriptions",
+        confidence: 95,
+      },
+      "google cloud": {
+        category: "5020",
+        name: "Software Subscriptions",
+        confidence: 95,
+      },
+      "microsoft azure": {
+        category: "5020",
+        name: "Software Subscriptions",
+        confidence: 95,
+      },
+
+      // Transportation - No amount limits
       uber: {
         category: "5040",
         name: "Travel & Transportation",
-        confidence: 90,
+        confidence: 95,
       },
       lyft: {
         category: "5040",
         name: "Travel & Transportation",
+        confidence: 95,
+      },
+      taxi: {
+        category: "5040",
+        name: "Travel & Transportation",
         confidence: 90,
       },
 
-      // Food
+      // Airlines
+      united: {
+        category: "5040",
+        name: "Travel & Transportation",
+        confidence: 95,
+      },
+      delta: {
+        category: "5040",
+        name: "Travel & Transportation",
+        confidence: 95,
+      },
+      "american airlines": {
+        category: "5040",
+        name: "Travel & Transportation",
+        confidence: 95,
+      },
+      southwest: {
+        category: "5040",
+        name: "Travel & Transportation",
+        confidence: 95,
+      },
+
+      // Food & Entertainment - No amount limits
       starbucks: {
+        category: "5050",
+        name: "Meals & Entertainment",
+        confidence: 90,
+      },
+      "dunkin donuts": {
+        category: "5050",
+        name: "Meals & Entertainment",
+        confidence: 90,
+      },
+      mcdonald: {
+        category: "5050",
+        name: "Meals & Entertainment",
+        confidence: 90,
+      },
+      "burger king": {
+        category: "5050",
+        name: "Meals & Entertainment",
+        confidence: 90,
+      },
+      subway: {
+        category: "5050",
+        name: "Meals & Entertainment",
+        confidence: 90,
+      },
+      chipotle: {
+        category: "5050",
+        name: "Meals & Entertainment",
+        confidence: 90,
+      },
+      "taco bell": {
+        category: "5050",
+        name: "Meals & Entertainment",
+        confidence: 90,
+      },
+      kfc: {
+        category: "5050",
+        name: "Meals & Entertainment",
+        confidence: 90,
+      },
+      restaurant: {
         category: "5050",
         name: "Meals & Entertainment",
         confidence: 80,
       },
+      cafe: {
+        category: "5050",
+        name: "Meals & Entertainment",
+        confidence: 80,
+      },
+      bistro: {
+        category: "5050",
+        name: "Meals & Entertainment",
+        confidence: 80,
+      },
+      doordash: {
+        category: "5050",
+        name: "Meals & Entertainment",
+        confidence: 85,
+      },
+      grubhub: {
+        category: "5050",
+        name: "Meals & Entertainment",
+        confidence: 85,
+      },
+      ubereats: {
+        category: "5050",
+        name: "Meals & Entertainment",
+        confidence: 85,
+      },
 
-      // Retail/Office
-      amazon: { category: "5010", name: "Office Supplies", confidence: 50 },
-      walmart: { category: "5010", name: "Office Supplies", confidence: 60 },
-      target: { category: "5010", name: "Office Supplies", confidence: 60 },
+      // Retail/Office - More generous confidence
+      amazon: {
+        category: "5010",
+        name: "Office Supplies",
+        confidence: 70,
+      },
+      walmart: {
+        category: "5010",
+        name: "Office Supplies",
+        confidence: 70,
+      },
+      target: {
+        category: "5010",
+        name: "Office Supplies",
+        confidence: 70,
+      },
+      costco: {
+        category: "5010",
+        name: "Office Supplies",
+        confidence: 70,
+      },
       "office depot": {
         category: "5010",
         name: "Office Supplies",
-        confidence: 85,
+        confidence: 90,
       },
-      staples: { category: "5010", name: "Office Supplies", confidence: 85 },
+      staples: {
+        category: "5010",
+        name: "Office Supplies",
+        confidence: 90,
+      },
       "best buy": {
         category: "5100",
         name: "Equipment & Technology",
-        confidence: 80,
+        confidence: 85,
       },
       "home depot": {
         category: "5110",
         name: "Maintenance & Repairs",
+        confidence: 85,
+      },
+
+      // Professional Services
+      lawyer: {
+        category: "5060",
+        name: "Professional Services",
+        confidence: 95,
+      },
+      attorney: {
+        category: "5060",
+        name: "Professional Services",
+        confidence: 95,
+      },
+      accountant: {
+        category: "5060",
+        name: "Professional Services",
+        confidence: 95,
+      },
+      consultant: {
+        category: "5060",
+        name: "Professional Services",
+        confidence: 85,
+      },
+      freelancer: {
+        category: "5060",
+        name: "Professional Services",
         confidence: 80,
+      },
+
+      // Utilities & Communications
+      verizon: {
+        category: "5030",
+        name: "Internet & Phone",
+        confidence: 95,
+      },
+      "at&t": {
+        category: "5030",
+        name: "Internet & Phone",
+        confidence: 95,
+      },
+      comcast: {
+        category: "5030",
+        name: "Internet & Phone",
+        confidence: 95,
+      },
+      "t-mobile": {
+        category: "5030",
+        name: "Internet & Phone",
+        confidence: 95,
+      },
+      sprint: {
+        category: "5030",
+        name: "Internet & Phone",
+        confidence: 90,
+      },
+
+      // Marketing & Advertising
+      "google ads": {
+        category: "5070",
+        name: "Marketing & Advertising",
+        confidence: 95,
+      },
+      "facebook ads": {
+        category: "5070",
+        name: "Marketing & Advertising",
+        confidence: 95,
+      },
+      "linkedin ads": {
+        category: "5070",
+        name: "Marketing & Advertising",
+        confidence: 95,
+      },
+      facebook: {
+        category: "5070",
+        name: "Marketing & Advertising",
+        confidence: 80,
+      },
+      instagram: {
+        category: "5070",
+        name: "Marketing & Advertising",
+        confidence: 80,
+      },
+      linkedin: {
+        category: "5070",
+        name: "Marketing & Advertising",
+        confidence: 80,
+      },
+
+      // Education & Training
+      udemy: {
+        category: "5120",
+        name: "Training & Education",
+        confidence: 95,
+      },
+      coursera: {
+        category: "5120",
+        name: "Training & Education",
+        confidence: 95,
+      },
+      pluralsight: {
+        category: "5120",
+        name: "Training & Education",
+        confidence: 95,
+      },
+      "linkedin learning": {
+        category: "5120",
+        name: "Training & Education",
+        confidence: 95,
+      },
+
+      // Insurance
+      insurance: {
+        category: "5090",
+        name: "Insurance",
+        confidence: 85,
+      },
+
+      // Banking
+      "bank fee": {
+        category: "5130",
+        name: "Bank Fees",
+        confidence: 90,
       },
     };
 
     // Check for exact or partial matches
     for (const [vendor_key, prediction] of Object.entries(predictions)) {
       if (vendorLower.includes(vendor_key)) {
-        return prediction;
+        return {
+          ...prediction,
+          reason: `Matched vendor pattern: ${vendor_key}`,
+          alternatives: getAlternativeCategories(prediction.category, 2),
+        };
       }
     }
 
-    // Default prediction based on amount ranges (very low confidence)
-    if (amount < 20) {
-      return {
+    // Enhanced pattern matching for broader coverage
+    const patterns = [
+      {
+        pattern:
+          /\b(restaurant|bistro|cafe|diner|eatery|grill|kitchen|bar|food)\b/i,
         category: "5050",
         name: "Meals & Entertainment",
-        confidence: 25,
-        reason: "Unknown vendor with small amount - please verify category",
-      };
-    } else if (amount < 100) {
-      return {
-        category: "5010",
-        name: "Office Supplies",
-        confidence: 25,
-        reason: "Unknown vendor with medium amount - please verify category",
-      };
-    } else {
-      return {
+        confidence: 75,
+      },
+      {
+        pattern: /\b(hotel|motel|inn|resort|lodging|accommodation)\b/i,
+        category: "5040",
+        name: "Travel & Transportation",
+        confidence: 85,
+      },
+      {
+        pattern: /\b(gas|fuel|petrol|shell|exxon|bp|chevron|station)\b/i,
+        category: "5040",
+        name: "Travel & Transportation",
+        confidence: 85,
+      },
+      {
+        pattern: /\b(parking|toll|airport)\b/i,
+        category: "5040",
+        name: "Travel & Transportation",
+        confidence: 80,
+      },
+      {
+        pattern: /\b(insurance|coverage|policy|premium)\b/i,
+        category: "5090",
+        name: "Insurance",
+        confidence: 85,
+      },
+      {
+        pattern: /\b(training|course|education|learning|workshop|seminar)\b/i,
+        category: "5120",
+        name: "Training & Education",
+        confidence: 85,
+      },
+      {
+        pattern: /\b(bank|fee|charge|finance|loan|credit)\b/i,
+        category: "5130",
+        name: "Bank Fees",
+        confidence: 75,
+      },
+      {
+        pattern: /\b(electric|gas|water|utility|power|energy)\b/i,
+        category: "5080",
+        name: "Rent & Utilities",
+        confidence: 85,
+      },
+      {
+        pattern: /\b(software|app|saas|subscription|service)\b/i,
+        category: "5020",
+        name: "Software Subscriptions",
+        confidence: 70,
+      },
+      {
+        pattern: /\b(computer|laptop|server|hardware|tech)\b/i,
+        category: "5100",
+        name: "Equipment & Technology",
+        confidence: 75,
+      },
+      {
+        pattern: /\b(repair|maintenance|fix|service)\b/i,
+        category: "5110",
+        name: "Maintenance & Repairs",
+        confidence: 70,
+      },
+      {
+        pattern: /\b(marketing|advertising|promotion|ad)\b/i,
+        category: "5070",
+        name: "Marketing & Advertising",
+        confidence: 75,
+      },
+      {
+        pattern: /\b(llc|inc|corp|ltd|company|co\.)\b/i,
         category: "5060",
         name: "Professional Services",
-        confidence: 20,
-        reason: "Unknown vendor with large amount - please verify category",
-      };
+        confidence: 60,
+      },
+      {
+        pattern: /\b(store|shop|market|retail|supply)\b/i,
+        category: "5010",
+        name: "Office Supplies",
+        confidence: 55,
+      },
+    ];
+
+    for (const { pattern, category, name, confidence } of patterns) {
+      if (pattern.test(vendorLower)) {
+        return {
+          category,
+          name,
+          confidence,
+          reason: `Matched business pattern in vendor name`,
+          alternatives: getAlternativeCategories(category, 2),
+        };
+      }
     }
+
+    // Default fallback without amount-based restrictions
+    return {
+      category: "5140",
+      name: "Miscellaneous Expenses",
+      confidence: 30,
+      reason: "Unknown vendor type - please verify category",
+      alternatives: [
+        { category: "5010", name: "Office Supplies", confidence: 35 },
+        { category: "5050", name: "Meals & Entertainment", confidence: 35 },
+        { category: "5060", name: "Professional Services", confidence: 30 },
+        { category: "5020", name: "Software Subscriptions", confidence: 30 },
+      ],
+    };
   } catch (error) {
     console.error("Category prediction error:", error);
     return {
@@ -423,6 +815,22 @@ async function predictCategory(vendor, amount) {
       reason: "Prediction error - please select category manually",
     };
   }
+}
+
+/**
+ * Helper function for alternative categories
+ */
+function getAlternativeCategories(excludeCode, count = 2) {
+  const { defaultCategories } = require("./categories");
+  const expenseCategories = defaultCategories
+    .filter((c) => c.code.startsWith("5") && c.code !== excludeCode)
+    .slice(0, count);
+
+  return expenseCategories.map((c) => ({
+    category: c.code,
+    name: c.name,
+    confidence: Math.floor(Math.random() * 15) + 25, // 25-40% confidence
+  }));
 }
 
 /**

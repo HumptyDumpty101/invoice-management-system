@@ -120,25 +120,94 @@ export default function InvoiceEditPage({ params }) {
 
   const validateForm = () => {
     const errors = {};
+    const warnings = [];
 
+    // CHANGED: Much more lenient validation - mostly just required field checks
     if (!formData.vendor?.trim()) {
       errors.vendor = "Vendor name is required";
+    } else if (formData.vendor.trim().length > 200) {
+      warnings.push("Vendor name is very long");
     }
 
     if (!formData.date) {
       errors.date = "Date is required";
+    } else {
+      // CHANGED: More lenient date validation
+      const selectedDate = new Date(formData.date);
+      const fiveYearsAgo = new Date();
+      fiveYearsAgo.setFullYear(fiveYearsAgo.getFullYear() - 5);
+      const twoYearsFromNow = new Date();
+      twoYearsFromNow.setFullYear(twoYearsFromNow.getFullYear() + 2);
+
+      if (selectedDate < fiveYearsAgo) {
+        warnings.push("Date is over 5 years old - please verify");
+      } else if (selectedDate > twoYearsFromNow) {
+        warnings.push("Date is over 2 years in the future - please verify");
+      }
     }
 
     if (!formData.amount || formData.amount <= 0) {
       errors.amount = "Amount must be greater than 0";
+    } else {
+      // CHANGED: Only warn for extreme amounts, don't block
+      if (formData.amount > 1000000) {
+        warnings.push("Amount is very large - please verify");
+      }
+      if (formData.amount < 0.01) {
+        warnings.push("Amount is very small - please verify");
+      }
     }
 
     if (!formData.category) {
       errors.category = "Category is required";
     }
 
+    // CHANGED: Business logic warnings only, no blocking
+    if (formData.vendor && formData.amount) {
+      const vendor = formData.vendor.toLowerCase();
+
+      // Food service warning (not blocking)
+      const foodKeywords = [
+        "restaurant",
+        "cafe",
+        "bistro",
+        "starbucks",
+        "mcdonald",
+        "food",
+      ];
+      const isFood = foodKeywords.some((keyword) => vendor.includes(keyword));
+      if (isFood && formData.amount > 1000) {
+        warnings.push(
+          "High amount for food/restaurant - please verify this is correct"
+        );
+      }
+
+      // Subscription service warning (not blocking)
+      const subscriptionServices = [
+        "midjourney",
+        "netflix",
+        "spotify",
+        "adobe",
+        "microsoft",
+      ];
+      const isSubscription = subscriptionServices.some((service) =>
+        vendor.includes(service)
+      );
+      if (isSubscription && formData.amount > 1000) {
+        warnings.push("High amount for subscription service - please verify");
+      }
+    }
+
     setValidationErrors(errors);
-    return Object.keys(errors).length === 0;
+
+    // CHANGED: Show warnings as toast messages instead of blocking
+    if (warnings.length > 0) {
+      warnings.forEach((warning) => {
+        toast.warning(warning, { duration: 4000 });
+      });
+    }
+
+    return Object.keys(errors).length === 0; // Only block for required fields and basic format issues
   };
 
   const handleSave = async () => {
@@ -385,30 +454,34 @@ export default function InvoiceEditPage({ params }) {
                 Invoice Processed Successfully
               </h3>
               <p className="text-green-700 text-sm">
-                High confidence extraction ({confidence}%) with no issues
-                detected.
+                High confidence extraction ({confidence}%) with no critical
+                issues detected.
               </p>
             </div>
           </div>
         </div>
       ) : (
-        <div className="card p-4 bg-yellow-50 border-yellow-200">
+        <div className="card p-4 bg-blue-50 border-blue-200">
+          {" "}
+          {/* CHANGED: Blue instead of yellow for less alarming */}
           <div className="flex items-start space-x-3">
-            <AlertTriangle className="w-5 h-5 text-yellow-600 mt-0.5" />
+            <Info className="w-5 h-5 text-blue-600 mt-0.5" />{" "}
+            {/* CHANGED: Info instead of warning icon */}
             <div className="flex-1">
-              <h3 className="font-medium text-yellow-900">Review Required</h3>
-              <p className="text-yellow-700 text-sm mb-2">
+              <h3 className="font-medium text-blue-900">Review Recommended</h3>{" "}
+              {/* CHANGED: Softer language */}
+              <p className="text-blue-700 text-sm mb-2">
                 This invoice has been flagged for review (Confidence:{" "}
                 {confidence}%).
               </p>
               {issues.length > 0 && (
                 <div className="space-y-1">
-                  <p className="text-yellow-700 text-sm font-medium">
-                    Issues found:
+                  <p className="text-blue-700 text-sm font-medium">
+                    Notes found:
                   </p>
                   <ul className="list-disc list-inside space-y-1">
                     {issues.map((issue, index) => (
-                      <li key={index} className="text-yellow-700 text-sm">
+                      <li key={index} className="text-blue-700 text-sm">
                         {issue}
                       </li>
                     ))}

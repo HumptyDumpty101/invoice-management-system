@@ -31,6 +31,12 @@ export default function Navigation() {
       description: "View all invoices",
     },
     {
+      href: "/review",
+      label: "Review",
+      icon: TrendingUp,
+      description: "Review & approve invoices",
+    },
+    {
       href: "/categories",
       label: "Categories",
       icon: Settings,

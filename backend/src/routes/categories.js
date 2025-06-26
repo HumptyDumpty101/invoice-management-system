@@ -165,9 +165,6 @@ const defaultCategories = [
  */
 router.get("/", async (req, res) => {
   try {
-    // For MVP, return static categories
-    // In production, you'd store these in database and allow customization
-
     const categories = defaultCategories.map((cat) => ({
       ...cat,
       createdAt: new Date(),
@@ -281,7 +278,6 @@ router.post("/", async (req, res) => {
     }
 
     // For MVP, we'll simulate creation but not persist
-    // In production, you'd save to database
     const newCategory = {
       code,
       name: name.trim(),
@@ -382,10 +378,6 @@ router.delete("/:code", async (req, res) => {
       });
     }
 
-    // In production, you'd also check if category is in use
-    // const Invoice = require('../models/Invoice');
-    // const inUse = await Invoice.countDocuments({ category: code });
-
     res.json({
       success: true,
       message:
@@ -402,6 +394,7 @@ router.delete("/:code", async (req, res) => {
 
 /**
  * GET /api/categories/predict/:vendor - Predict category for vendor
+ * UPDATED: Removed all amount-based restrictions
  */
 router.get("/predict/:vendor", async (req, res) => {
   try {
@@ -432,83 +425,119 @@ router.get("/predict/:vendor", async (req, res) => {
 });
 
 /**
- * Simple category prediction logic
- * In production, this would use a proper learning system
+ * Enhanced category prediction logic - REMOVED amount-based restrictions
  */
 async function predictCategoryForVendor(vendor, amount) {
   const vendorLower = vendor.toLowerCase();
 
-  // Rule-based predictions for common vendors
+  // First, check learning system
+  const VendorMapping = require("../models/VendorMapping");
+  const learnedPrediction = await VendorMapping.predictCategory(vendor, amount);
+
+  if (learnedPrediction && learnedPrediction.confidence >= 50) {
+    // Use learned prediction if confidence is reasonable
+    const category = defaultCategories.find(
+      (c) => c.code === learnedPrediction.category
+    );
+    return {
+      category: learnedPrediction.category,
+      name: category ? category.name : "Unknown Category",
+      confidence: learnedPrediction.confidence,
+      reason: learnedPrediction.reason,
+      alternatives: learnedPrediction.alternatives,
+    };
+  }
+
+  // Enhanced rule-based predictions for NEW vendors - NO AMOUNT RESTRICTIONS
   const rules = [
     // Technology & Software
     {
-      pattern: /amazon|amzn/,
+      pattern: /\b(midjourney|openai|chatgpt|claude|anthropic)\b/i,
+      category: "5020",
+      name: "Software Subscriptions",
+      confidence: 95,
+    },
+    {
+      pattern: /amazon\s*(web\s*services|aws)|amzn.*aws/i,
+      category: "5020",
+      name: "Software Subscriptions",
+      confidence: 95,
+    },
+    {
+      pattern: /amazon|amzn(?!.*aws)/i,
       category: "5010",
       name: "Office Supplies",
       confidence: 75,
     },
     {
-      pattern: /microsoft|adobe|slack|zoom/,
+      pattern:
+        /microsoft|adobe|slack|zoom|dropbox|google\s*(workspace|cloud)|github/i,
       category: "5020",
       name: "Software Subscriptions",
       confidence: 90,
     },
     {
-      pattern: /apple|google|dropbox/,
+      pattern: /apple\s*(app\s*store|music|icloud)|itunes|figma|notion/i,
       category: "5020",
       name: "Software Subscriptions",
       confidence: 85,
     },
 
-    // Transportation
+    // Transportation - NO AMOUNT LIMITS
     {
-      pattern: /uber|lyft|taxi/,
+      pattern: /uber|lyft|taxi/i,
       category: "5040",
       name: "Travel & Transportation",
       confidence: 95,
     },
     {
-      pattern: /parking|airport/,
+      pattern: /parking|airport|toll|gas|fuel|shell|exxon|bp|chevron/i,
       category: "5040",
       name: "Travel & Transportation",
-      confidence: 90,
+      confidence: 85,
     },
     {
-      pattern: /united|delta|american airlines/,
+      pattern: /united|delta|american\s*airlines|southwest|jetblue/i,
       category: "5040",
       name: "Travel & Transportation",
       confidence: 95,
     },
 
-    // Food & Entertainment
+    // Food & Entertainment - NO AMOUNT LIMITS
     {
-      pattern: /starbucks|dunkin|coffee/,
+      pattern: /starbucks|dunkin|coffee/i,
       category: "5050",
       name: "Meals & Entertainment",
-      confidence: 80,
+      confidence: 90,
     },
     {
-      pattern: /restaurant|bistro|cafe|diner/,
+      pattern: /restaurant|bistro|cafe|diner|eatery|dining|grill|kitchen/i,
       category: "5050",
       name: "Meals & Entertainment",
       confidence: 85,
     },
     {
-      pattern: /mcdonald|burger|pizza/,
+      pattern: /mcdonald|burger|pizza|kfc|subway|chipotle|taco\s*bell/i,
       category: "5050",
       name: "Meals & Entertainment",
-      confidence: 75,
+      confidence: 90,
+    },
+    {
+      pattern: /catering|food\s*delivery|doordash|grubhub|ubereats/i,
+      category: "5050",
+      name: "Meals & Entertainment",
+      confidence: 85,
     },
 
-    // Office Supplies
+    // Office & Retail
     {
-      pattern: /office depot|staples|best buy/,
+      pattern: /office\s*depot|staples|best\s*buy/i,
       category: "5010",
       name: "Office Supplies",
       confidence: 90,
     },
     {
-      pattern: /walmart|target/,
+      pattern: /walmart|target|costco/i,
       category: "5010",
       name: "Office Supplies",
       confidence: 70,
@@ -516,57 +545,97 @@ async function predictCategoryForVendor(vendor, amount) {
 
     // Professional Services
     {
-      pattern: /lawyer|attorney|legal/,
+      pattern: /lawyer|attorney|legal|law\s*firm/i,
       category: "5060",
       name: "Professional Services",
       confidence: 95,
     },
     {
-      pattern: /accountant|cpa|bookkeep/,
+      pattern: /accountant|cpa|bookkeep|tax\s*prep/i,
       category: "5060",
       name: "Professional Services",
       confidence: 95,
     },
     {
-      pattern: /consultant|contractor/,
+      pattern: /consultant|contractor|freelance/i,
       category: "5060",
       name: "Professional Services",
-      confidence: 85,
+      confidence: 80,
     },
 
     // Utilities & Communications
     {
-      pattern: /verizon|at&t|comcast|sprint/,
+      pattern: /verizon|at&t|comcast|sprint|t-mobile/i,
       category: "5030",
       name: "Internet & Phone",
       confidence: 90,
     },
     {
-      pattern: /electric|gas|water|utility/,
+      pattern: /electric|gas|water|utility|power|energy/i,
       category: "5080",
       name: "Rent & Utilities",
       confidence: 90,
     },
 
-    // Marketing
+    // Marketing & Advertising
     {
-      pattern: /facebook|instagram|linkedin|ads/,
+      pattern: /facebook|instagram|linkedin|twitter|ads|advertising|marketing/i,
       category: "5070",
       name: "Marketing & Advertising",
-      confidence: 90,
+      confidence: 85,
     },
     {
-      pattern: /print|design|marketing/,
+      pattern: /google\s*ads|facebook\s*ads|linkedin\s*ads/i,
       category: "5070",
       name: "Marketing & Advertising",
+      confidence: 95,
+    },
+
+    // Equipment & Technology
+    {
+      pattern: /dell|hp|lenovo|apple\s*store|computer|laptop|server/i,
+      category: "5100",
+      name: "Equipment & Technology",
+      confidence: 85,
+    },
+
+    // Training & Education
+    {
+      pattern:
+        /course|training|education|udemy|coursera|pluralsight|linkedin\s*learning/i,
+      category: "5120",
+      name: "Training & Education",
+      confidence: 90,
+    },
+
+    // Insurance
+    {
+      pattern: /insurance|coverage|policy|premium/i,
+      category: "5090",
+      name: "Insurance",
+      confidence: 85,
+    },
+
+    // Bank & Financial
+    {
+      pattern: /bank|fee|charge|interest|finance|loan/i,
+      category: "5130",
+      name: "Bank Fees",
       confidence: 80,
+    },
+
+    // Hotels & Accommodation
+    {
+      pattern: /hotel|motel|inn|resort|lodging|accommodation/i,
+      category: "5040",
+      name: "Travel & Transportation",
+      confidence: 85,
     },
   ];
 
-  // Check rules
+  // Check rules - NO AMOUNT-BASED LOGIC
   for (const rule of rules) {
     if (rule.pattern.test(vendorLower)) {
-      const category = defaultCategories.find((c) => c.code === rule.category);
       return {
         category: rule.category,
         name: rule.name,
@@ -577,43 +646,35 @@ async function predictCategoryForVendor(vendor, amount) {
     }
   }
 
-  // Amount-based fallback predictions
-  const amountNum = parseFloat(amount);
-  if (!isNaN(amountNum)) {
-    if (amountNum < 20) {
-      return {
-        category: "5050",
-        name: "Meals & Entertainment",
-        confidence: 60,
-        reason: "Small amount suggests meal or refreshment",
-        alternatives: getAlternativeCategories("5050", 2),
-      };
-    } else if (amountNum < 100) {
-      return {
-        category: "5010",
-        name: "Office Supplies",
-        confidence: 50,
-        reason: "Medium amount suggests office supplies",
-        alternatives: getAlternativeCategories("5010", 2),
-      };
-    } else {
-      return {
-        category: "5060",
-        name: "Professional Services",
-        confidence: 40,
-        reason: "Large amount suggests professional service",
-        alternatives: getAlternativeCategories("5060", 2),
-      };
-    }
+  // Improved fallback logic without amount restrictions
+  // Look for generic business indicators
+  if (/\b(llc|inc|corp|ltd|company|co\.)\b/i.test(vendorLower)) {
+    return {
+      category: "5060",
+      name: "Professional Services",
+      confidence: 60,
+      reason: "Business entity detected",
+      alternatives: getAlternativeCategories("5060", 3),
+    };
   }
 
-  // Default fallback
+  if (/\b(store|shop|market|retail)\b/i.test(vendorLower)) {
+    return {
+      category: "5010",
+      name: "Office Supplies",
+      confidence: 50,
+      reason: "Retail establishment detected",
+      alternatives: getAlternativeCategories("5010", 3),
+    };
+  }
+
+  // Default fallback - NO amount-based suggestions
   return {
     category: "5140",
     name: "Miscellaneous Expenses",
     confidence: 30,
-    reason: "No specific pattern matched",
-    alternatives: getAlternativeCategories("5140", 3),
+    reason: "Unknown vendor - please select appropriate category",
+    alternatives: getAlternativeCategories("5140", 4),
   };
 }
 
@@ -628,8 +689,9 @@ function getAlternativeCategories(excludeCode, count = 2) {
   return expenseCategories.map((c) => ({
     category: c.code,
     name: c.name,
-    confidence: Math.floor(Math.random() * 20) + 20, // Random low confidence
+    confidence: Math.floor(Math.random() * 15) + 25, // 25-40% confidence
   }));
 }
 
 module.exports = router;
+module.exports.defaultCategories = defaultCategories;

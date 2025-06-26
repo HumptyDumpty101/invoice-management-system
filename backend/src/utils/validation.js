@@ -10,70 +10,78 @@ async function validateInvoiceData(data, fileMetadata = {}) {
   const issues = [];
   let overallConfidence = 100;
 
-  // Validate individual fields
+  // Validate individual fields - CHANGED: Only warnings, no blocking
   const dateValidation = validateDate(data.date);
   const amountValidation = validateAmount(data.amount);
   const vendorValidation = validateVendor(data.vendor);
   const lineItemsValidation = validateLineItems(data.lineItems, data.amount);
 
-  // Date validation
+  // Date validation - CHANGED: Convert errors to warnings
   if (!dateValidation.valid) {
-    issues.push(dateValidation.error);
-    overallConfidence -= 20;
+    issues.push(`Date warning: ${dateValidation.error}`);
+    overallConfidence -= 15; // Reduced penalty
   }
 
-  // Amount validation
+  // Amount validation - CHANGED: Convert errors to warnings
   if (!amountValidation.valid) {
-    issues.push(amountValidation.error);
-    overallConfidence -= 30;
+    issues.push(`Amount warning: ${amountValidation.error}`);
+    overallConfidence -= 20; // Reduced penalty
   }
 
-  // Vendor validation
+  // Vendor validation - CHANGED: Convert errors to warnings
   if (!vendorValidation.valid) {
-    issues.push(vendorValidation.error);
-    overallConfidence -= 15;
+    issues.push(`Vendor warning: ${vendorValidation.error}`);
+    overallConfidence -= 10; // Reduced penalty
   }
 
-  // Line items validation
+  // Line items validation - CHANGED: Only warnings
   if (!lineItemsValidation.valid) {
-    issues.push(...lineItemsValidation.errors);
-    overallConfidence -= lineItemsValidation.penalty;
+    issues.push(
+      ...lineItemsValidation.errors.map((err) => `Line items warning: ${err}`)
+    );
+    overallConfidence -= Math.min(lineItemsValidation.penalty, 15); // Cap penalty
   }
 
   // File quality adjustments
   if (fileMetadata.ocrConfidence && fileMetadata.ocrConfidence < 70) {
     issues.push("Low OCR confidence - please verify extracted data");
-    overallConfidence -= 15;
+    overallConfidence -= 10; // Reduced penalty
   }
 
   if (fileMetadata.pageCount && fileMetadata.pageCount > 1) {
     issues.push("Multi-page document - verify all line items captured");
-    overallConfidence -= 5;
+    overallConfidence -= 3; // Reduced penalty
   }
 
-  // Cross-field validation
+  // Cross-field validation - CHANGED: Only warnings
   const crossValidation = validateCrossFields(data);
   if (crossValidation.issues.length > 0) {
-    issues.push(...crossValidation.issues);
-    overallConfidence -= crossValidation.penalty;
+    issues.push(
+      ...crossValidation.issues.map((issue) => `Validation notice: ${issue}`)
+    );
+    overallConfidence -= Math.min(crossValidation.penalty, 10); // Cap penalty
   }
 
-  // Additional business logic validations
+  // Business logic validations - CHANGED: Only confidence penalties
   const businessValidation = validateBusinessLogic(data);
   if (businessValidation.issues.length > 0) {
-    issues.push(...businessValidation.issues);
-    overallConfidence -= businessValidation.penalty;
+    issues.push(
+      ...businessValidation.issues.map(
+        (issue) => `Business logic notice: ${issue}`
+      )
+    );
+    overallConfidence -= Math.min(businessValidation.penalty, 10); // Cap penalty
   }
 
   return {
-    isValid: issues.length === 0,
+    isValid: true, // CHANGED: Always return true - never block edits
     dateValid: dateValidation.valid,
     amountValid: amountValidation.valid,
     vendorValid: vendorValidation.valid,
     lineItemsValid: lineItemsValidation.valid,
-    overallConfidence: Math.max(0, overallConfidence),
+    overallConfidence: Math.max(20, overallConfidence), // Minimum 20% confidence
     issues,
-    needsReview: overallConfidence < 80 || issues.length > 2,
+    needsReview: overallConfidence < 80 || issues.length > 3, // Adjusted threshold
   };
 }
 
@@ -187,7 +195,7 @@ function validateBusinessLogic(data) {
   const issues = [];
   let penalty = 0;
 
-  // Vendor-specific validations
+  // Vendor-specific validations - CHANGED: Only warnings
   if (data.vendor) {
     const vendor = data.vendor.toLowerCase();
 
@@ -198,80 +206,87 @@ function validateBusinessLogic(data) {
       "spotify",
       "adobe",
       "microsoft",
+      "zoom",
+      "slack",
     ];
     const isSubscription = subscriptionServices.some((service) =>
       vendor.includes(service)
     );
 
     if (isSubscription && data.amount > 1000) {
-      issues.push("Unusually high amount for subscription service");
-      penalty += 5;
+      issues.push("High amount for subscription service - please verify");
+      penalty += 3; // Reduced from 5
     }
 
-    // Check for restaurant/food with very high amounts
+    // Check for restaurant/food with very high amounts - CHANGED: Much more lenient
     const foodKeywords = [
       "restaurant",
       "cafe",
       "bistro",
       "starbucks",
       "mcdonald",
+      "food",
+      "dining",
     ];
     const isFood = foodKeywords.some((keyword) => vendor.includes(keyword));
 
-    if (isFood && data.amount > 500) {
-      issues.push("Unusually high amount for food/restaurant");
-      penalty += 3;
+    if (isFood && data.amount > 1000) {
+      // CHANGED: Increased threshold from 500 to 1000
+      issues.push(
+        "High amount for food/restaurant - please verify this is correct"
+      );
+      penalty += 2; // Reduced from 3
     }
+
+    // REMOVED: Uber high amount check - too restrictive for business travel
   }
 
-  // Date logic validations
+  // Date logic validations - CHANGED: More lenient
   if (data.date) {
     const now = new Date();
     const invoiceDate = new Date(data.date);
 
-    // Check if invoice is from future
+    // Check if invoice is from future - CHANGED: More lenient
     if (invoiceDate > now) {
       const daysDiff = Math.ceil((invoiceDate - now) / (1000 * 60 * 60 * 24));
-      if (daysDiff > 30) {
-        issues.push("Invoice date is far in the future");
-        penalty += 10;
+      if (daysDiff > 90) {
+        // CHANGED: Increased from 30 to 90 days
+        issues.push("Invoice date is far in the future - please verify");
+        penalty += 5; // Reduced from 10
       }
     }
 
-    // Check if invoice is very old
-    const oneYearAgo = new Date(
-      now.getFullYear() - 1,
+    // Check if invoice is very old - CHANGED: More lenient
+    const twoYearsAgo = new Date(
+      now.getFullYear() - 2,
       now.getMonth(),
       now.getDate()
     );
-    if (invoiceDate < oneYearAgo) {
-      issues.push("Invoice is over a year old");
-      penalty += 5;
+    if (invoiceDate < twoYearsAgo) {
+      issues.push("Invoice is over 2 years old - please verify date");
+      penalty += 3; // Reduced from 5
     }
   }
 
-  // Amount reasonableness checks
+  // Amount reasonableness checks - CHANGED: Much more lenient
   if (data.amount) {
-    // Check for round numbers (might indicate estimation)
-    if (data.amount % 10 === 0 && data.amount >= 100) {
-      // Don't penalize, but note it
-      // This is common and not necessarily an error
-    }
+    // REMOVED: Round number penalty - not useful
 
     // Check for very small amounts
     if (data.amount < 0.01) {
       issues.push("Amount is extremely small - possible parsing error");
-      penalty += 15;
+      penalty += 8; // Reduced from 15
     }
 
-    // Check for very large amounts
-    if (data.amount > 100000) {
+    // Check for very large amounts - CHANGED: Much higher threshold
+    if (data.amount > 1000000) {
+      // CHANGED: Increased from 100,000 to 1,000,000
       issues.push("Amount is extremely large - please verify");
-      penalty += 10;
+      penalty += 5; // Reduced from 10
     }
   }
 
-  // Line items business logic
+  // Line items business logic - CHANGED: More lenient
   if (data.lineItems && data.lineItems.length > 0) {
     // Check for items with zero or negative amounts
     const invalidAmountItems = data.lineItems.filter(
@@ -281,28 +296,26 @@ function validateBusinessLogic(data) {
       issues.push(
         `${invalidAmountItems.length} line items have invalid amounts`
       );
-      penalty += 5;
+      penalty += 3; // Reduced from 5
     }
 
-    // Check for extremely long descriptions (possible parsing errors)
+    // Check for extremely long descriptions - CHANGED: Higher threshold
     const longDescriptions = data.lineItems.filter(
-      (item) => item.description && item.description.length > 200
+      (item) => item.description && item.description.length > 500 // CHANGED: Increased from 200 to 500
     );
     if (longDescriptions.length > 0) {
       issues.push("Some line item descriptions are unusually long");
-      penalty += 3;
+      penalty += 2; // Reduced from 3
     }
 
-    // Check for items that look like headers or totals
+    // MODIFIED: More lenient header detection
     const suspiciousItems = data.lineItems.filter((item) => {
       const desc = item.description?.toLowerCase() || "";
-      return /^(total|subtotal|tax|amount|qty|quantity|description|item|price)$/i.test(
-        desc
-      );
+      return /^(total|subtotal|tax|amount due|balance due)$/i.test(desc); // More specific patterns
     });
     if (suspiciousItems.length > 0) {
-      issues.push("Some line items appear to be table headers or totals");
-      penalty += 8;
+      issues.push("Some line items appear to be totals rather than items");
+      penalty += 3; // Reduced from 8
     }
   }
 
@@ -323,30 +336,35 @@ function validateDate(date) {
     return { valid: false, error: "Invalid date format" };
   }
 
-  // Check if date is reasonable (not too far in future or past)
+  // CHANGED: Much more lenient date range
   const now = new Date();
-  const twoYearsAgo = new Date(
-    now.getFullYear() - 2,
+  const fiveYearsAgo = new Date(
+    now.getFullYear() - 5, // CHANGED: Increased from 2 to 5 years
     now.getMonth(),
     now.getDate()
   );
-  const oneYearFromNow = new Date(
-    now.getFullYear() + 1,
+  const twoYearsFromNow = new Date( // CHANGED: Increased from 1 to 2 years
+    now.getFullYear() + 2,
     now.getMonth(),
     now.getDate()
   );
 
-  if (dateObj < twoYearsAgo) {
-    return { valid: false, error: "Date seems too far in the past" };
+  if (dateObj < fiveYearsAgo) {
+    return {
+      valid: false,
+      error: "Date seems too far in the past (over 5 years)",
+    };
   }
 
-  if (dateObj > oneYearFromNow) {
-    return { valid: false, error: "Date is in the future" };
+  if (dateObj > twoYearsFromNow) {
+    return {
+      valid: false,
+      error: "Date is too far in the future (over 2 years)",
+    };
   }
 
   return { valid: true };
 }
-
 /**
  * Validate amount field with enhanced checks
  */
@@ -365,19 +383,22 @@ function validateAmount(amount) {
     return { valid: false, error: "Amount must be greater than zero" };
   }
 
-  if (numAmount > 1000000) {
+  // CHANGED: Much higher threshold
+  if (numAmount > 10000000) {
+    // CHANGED: Increased from 1,000,000 to 10,000,000
     return {
       valid: false,
-      error: "Amount seems unusually large - please verify",
+      error: "Amount seems unusually large (over $10M) - please verify",
     };
   }
 
   // Check for reasonable decimal places
   const decimalPlaces = (numAmount.toString().split(".")[1] || "").length;
-  if (decimalPlaces > 2) {
+  if (decimalPlaces > 4) {
+    // CHANGED: Increased from 2 to 4 decimal places
     return {
       valid: false,
-      error: "Amount should have at most 2 decimal places",
+      error: "Amount should have at most 4 decimal places",
     };
   }
 
@@ -521,34 +542,36 @@ function validateCrossFields(data) {
  * Enhanced invoice update validation
  */
 function validateInvoiceUpdate(data) {
-  // Enhanced Joi schema with better validation rules
+  // CHANGED: Much more lenient Joi schema
   const invoiceUpdateSchema = Joi.object({
     vendor: Joi.string()
       .trim()
-      .min(2)
-      .max(100)
-      .pattern(/^(?!unknown vendor$)/i)
+      .min(1) // CHANGED: Reduced from 2 to 1
+      .max(200) // CHANGED: Increased from 100 to 200
       .required()
       .messages({
-        "string.pattern.base": 'Vendor name cannot be "Unknown Vendor"',
-        "string.min": "Vendor name must be at least 2 characters",
-        "string.max": "Vendor name cannot exceed 100 characters",
+        "string.min": "Vendor name must be at least 1 character",
+        "string.max": "Vendor name cannot exceed 200 characters",
       }),
 
-    date: Joi.date().min("1-1-2022").max("12-31-2026").required().messages({
-      "date.min": "Date cannot be before January 1, 2022",
-      "date.max": "Date cannot be after December 31, 2026",
-    }),
+    date: Joi.date()
+      .min("1-1-2019") // CHANGED: More lenient - back to 2019
+      .max("12-31-2030") // CHANGED: More lenient - up to 2030
+      .required()
+      .messages({
+        "date.min": "Date cannot be before January 1, 2019",
+        "date.max": "Date cannot be after December 31, 2030",
+      }),
 
     amount: Joi.number()
       .positive()
-      .max(1000000)
-      .precision(2)
+      .max(10000000) // CHANGED: Increased from 1,000,000 to 10,000,000
+      .precision(4) // CHANGED: Increased from 2 to 4 decimal places
       .required()
       .messages({
         "number.positive": "Amount must be greater than 0",
-        "number.max": "Amount cannot exceed $1,000,000",
-        "number.precision": "Amount can have at most 2 decimal places",
+        "number.max": "Amount cannot exceed $10,000,000",
+        "number.precision": "Amount can have at most 4 decimal places",
       }),
 
     category: Joi.string()
@@ -562,15 +585,19 @@ function validateInvoiceUpdate(data) {
       lineItems: Joi.array()
         .items(
           Joi.object({
-            description: Joi.string().max(200).required(),
-            amount: Joi.number().positive().max(100000).precision(2).required(),
-            quantity: Joi.number().integer().positive().max(10000).default(1),
+            description: Joi.string().max(1000).required(), // CHANGED: Increased from 200 to 1000
+            amount: Joi.number()
+              .positive()
+              .max(10000000)
+              .precision(4)
+              .required(), // CHANGED: More lenient
+            quantity: Joi.number().integer().positive().max(100000).default(1), // CHANGED: Increased limit
           })
         )
-        .max(100),
+        .max(1000), // CHANGED: Increased from 100 to 1000
 
-      tax: Joi.number().min(0).max(100000).precision(2).default(0),
-      subtotal: Joi.number().positive().max(1000000).precision(2).optional(),
+      tax: Joi.number().min(0).max(10000000).precision(4).default(0), // CHANGED: More lenient
+      subtotal: Joi.number().positive().max(10000000).precision(4).optional(), // CHANGED: More lenient
       currency: Joi.string().length(3).default("USD"),
     }).optional(),
   });
@@ -589,19 +616,17 @@ function validateInvoiceUpdate(data) {
     };
   }
 
-  // Additional business logic validation
+  // CHANGED: Remove business logic blocking - just add warnings
   const businessValidation = validateBusinessLogic(value);
   if (businessValidation.issues.length > 0) {
-    return {
-      valid: false,
-      error: businessValidation.issues[0],
-      details: businessValidation.issues,
-    };
+    // Don't block, just note the issues
+    console.log("Business validation warnings:", businessValidation.issues);
   }
 
   return {
     valid: true,
     data: value,
+    warnings: businessValidation.issues, // ADDED: Include warnings but don't block
   };
 }
 
