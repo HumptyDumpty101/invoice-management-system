@@ -1,7 +1,4 @@
-/**
- * Enhanced Invoice Data Parser - Complete Fixed Version
- * Fixes issues with incorrect line item extraction and tax calculation
- */
+const { parseInvoiceDataWithLLM } = require("./llmInvoiceParser");
 
 /**
  * Parse extracted text to structured invoice data
@@ -9,7 +6,9 @@
  * @param {Object} metadata - Extraction metadata
  * @returns {Object} - Structured invoice data
  */
-function parseInvoiceData(text, metadata = {}) {
+
+// Original Function
+function parseInvoiceDataOriginal(text, metadata = {}) {
   const result = {
     vendor: extractVendor(text),
     date: extractDate(text),
@@ -23,6 +22,20 @@ function parseInvoiceData(text, metadata = {}) {
   result.parsingConfidence = calculateParsingConfidence(result, text);
 
   return result;
+}
+
+// GEMINI
+async function parseInvoiceData(text, metadata = {}) {
+  try {
+    // Try LLM parsing first
+    const result = await parseInvoiceDataWithLLM(text, metadata);
+    console.log("LLM parsing successful");
+    return result;
+  } catch (error) {
+    console.log("LLM failed, using fallback parsing");
+    // Your existing parsing logic as fallback
+    return parseInvoiceDataOriginal(text, metadata);
+  }
 }
 
 /**

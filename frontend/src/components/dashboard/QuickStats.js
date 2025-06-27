@@ -65,13 +65,13 @@ export default function QuickStats() {
         color="green"
       />
 
-      <StatCard
+      {/* <StatCard
         icon={<Clock className="w-5 h-5 text-purple-600" />}
         label="This Week"
         value={summary.periodInvoices || 0}
         subtitle={`${formatCurrency(summary.periodAmount || 0)}`}
         color="purple"
-      />
+      /> */}
 
       <StatCard
         icon={<TrendingUp className="w-5 h-5 text-indigo-600" />}

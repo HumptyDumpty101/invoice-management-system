@@ -173,7 +173,7 @@ export default function HomePage() {
       </div>
 
       {/* Sample Data Info */}
-      <div className="card p-6 bg-gradient-to-r from-blue-50 to-purple-50 border-blue-200">
+      {/* <div className="card p-6 bg-gradient-to-r from-blue-50 to-purple-50 border-blue-200">
         <div className="flex items-start space-x-4">
           <div className="p-2 bg-blue-100 rounded-full">
             <AlertCircle className="w-5 h-5 text-blue-600" />
@@ -206,7 +206,7 @@ export default function HomePage() {
             </div>
           </div>
         </div>
-      </div>
+      </div> */}
     </div>
   );
 }
