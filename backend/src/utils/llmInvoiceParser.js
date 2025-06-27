@@ -113,7 +113,7 @@ Examples of what NOT to extract:
    */
   async parseWithOpenAI(prompt) {
     const response = await this.openai.chat.completions.create({
-      model: "gpt-3.5-turbo", // or "gpt-4" for better accuracy
+      model: "gpt-3.5-turbo",
       messages: [
         {
           role: "user",
@@ -128,7 +128,7 @@ Examples of what NOT to extract:
   }
 
   /**
-   * Parse with Google Gemini (Free tier)
+   * Parse with Google Gemini
    */
   async parseWithGemini(prompt) {
     const result = await this.model.generateContent(prompt);

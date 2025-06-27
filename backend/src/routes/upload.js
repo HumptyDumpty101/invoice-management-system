@@ -92,7 +92,16 @@ router.post("/", upload.array("invoices", 5), async (req, res) => {
 
         // Clean up failed file
         try {
-          fs.unlinkSync(file.path);
+          // Add delay before cleanup to avoid EBUSY error
+          setTimeout(() => {
+            try {
+              if (fs.existsSync(file.path)) {
+                fs.unlinkSync(file.path);
+              }
+            } catch (cleanupError) {
+              console.error("Delayed cleanup error:", cleanupError);
+            }
+          }, 1000);
         } catch (cleanupError) {
           console.error("Error cleaning up file:", cleanupError);
         }
@@ -132,7 +141,15 @@ router.post("/", upload.array("invoices", 5), async (req, res) => {
     if (req.files) {
       req.files.forEach((file) => {
         try {
-          fs.unlinkSync(file.path);
+          setTimeout(() => {
+            try {
+              if (fs.existsSync(file.path)) {
+                fs.unlinkSync(file.path);
+              }
+            } catch (cleanupError) {
+              console.error("Cleanup error:", cleanupError);
+            }
+          }, 1000);
         } catch (cleanupError) {
           console.error("Error cleaning up file:", cleanupError);
         }
@@ -147,7 +164,7 @@ router.post("/", upload.array("invoices", 5), async (req, res) => {
 });
 
 /**
- * Process a single invoice file
+ * Process a single invoice file - FIXED DATE HANDLING
  */
 async function processInvoiceFile(file) {
   const startTime = Date.now();
@@ -163,24 +180,54 @@ async function processInvoiceFile(file) {
   const qualityCheck = validateExtractionQuality(extraction);
 
   // Step 3: Parse structured data
-  const parsedData = parseInvoiceData(extraction.text, extraction.metadata);
+  const parsedData = await parseInvoiceData(
+    extraction.text,
+    extraction.metadata
+  );
+
+  console.log("Parsed data from LLM:", {
+    vendor: parsedData.vendor,
+    date: parsedData.date,
+    dateType: typeof parsedData.date,
+    isValidDate:
+      parsedData.date instanceof Date && !isNaN(parsedData.date.getTime()),
+    amount: parsedData.amount,
+  });
+
+  // FIXED: Ensure date is a valid Date object
+  let validDate = parsedData.date;
+  if (!(validDate instanceof Date) || isNaN(validDate.getTime())) {
+    console.warn("Invalid date detected, using current date");
+    validDate = new Date();
+  }
 
   // Step 4: Extract additional metadata
   const additionalMetadata = extractMetadata(extraction.text);
 
-  // Step 5: Validate parsed data
-  const validation = await validateInvoiceData(parsedData, {
+  // Step 5: Validate parsed data - Pass the corrected date
+  const dataToValidate = {
+    ...parsedData,
+    date: validDate,
+  };
+
+  const validation = await validateInvoiceData(dataToValidate, {
     ocrConfidence: extraction.confidence,
     fileType,
     pageCount: extraction.pageCount,
   });
 
-  // Step 6: Check for potential duplicates
-  const potentialDuplicates = await Invoice.findPotentialDuplicates(
-    parsedData.vendor,
-    parsedData.amount,
-    parsedData.date
-  );
+  // Step 6: Check for potential duplicates - FIXED: Use valid date
+  let potentialDuplicates = [];
+  try {
+    potentialDuplicates = await Invoice.findPotentialDuplicates(
+      parsedData.vendor,
+      parsedData.amount,
+      validDate // Use the validated date
+    );
+  } catch (duplicateError) {
+    console.error("Error checking duplicates:", duplicateError);
+    // Continue without duplicate checking
+  }
 
   // Step 7: Predict category
   const categoryPrediction = await predictCategory(
@@ -188,12 +235,12 @@ async function processInvoiceFile(file) {
     parsedData.amount
   );
 
-  // Step 8: Create invoice record
+  // Step 8: Create invoice record - FIXED: Use valid date
   const invoice = new Invoice({
     vendor: parsedData.vendor,
-    date: parsedData.date,
+    date: validDate, // Use the validated date
     amount: parsedData.amount,
-    category: categoryPrediction ? categoryPrediction.category : "5140", // Default category
+    category: categoryPrediction ? categoryPrediction.category : "5140",
     categoryConfidence: categoryPrediction ? categoryPrediction.confidence : 0,
     rawText: extraction.text,
     extractedData: {
@@ -231,10 +278,10 @@ async function processInvoiceFile(file) {
 
   await invoice.save();
 
-  // Step 9: Update learning system (only if prediction was confident and not a duplicate)
+  // Step 9: Update learning system
   if (
     categoryPrediction &&
-    categoryPrediction.confidence >= 50 && // Lowered threshold
+    categoryPrediction.confidence >= 50 &&
     !invoice.isDuplicate
   ) {
     try {
@@ -242,7 +289,7 @@ async function processInvoiceFile(file) {
         parsedData.vendor,
         categoryPrediction.category,
         parsedData.amount,
-        false // Not user corrected - this is auto-assigned
+        false
       );
     } catch (error) {
       console.error("Failed to update learning system:", error);
