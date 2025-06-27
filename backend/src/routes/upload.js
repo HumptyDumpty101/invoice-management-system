@@ -866,18 +866,37 @@ async function predictCategory(vendor, amount) {
 
 /**
  * Helper function for alternative categories
- */
-function getAlternativeCategories(excludeCode, count = 2) {
-  const { defaultCategories } = require("./categories");
-  const expenseCategories = defaultCategories
-    .filter((c) => c.code.startsWith("5") && c.code !== excludeCode)
-    .slice(0, count);
+ */ function getAlternativeCategories(excludeCode, count = 2) {
+  try {
+    const { defaultCategories } = require("./categories");
 
-  return expenseCategories.map((c) => ({
-    category: c.code,
-    name: c.name,
-    confidence: Math.floor(Math.random() * 15) + 25, // 25-40% confidence
-  }));
+    // Add null check for defaultCategories
+    if (!defaultCategories || !Array.isArray(defaultCategories)) {
+      console.error("defaultCategories is not available or not an array");
+      return [
+        { category: "5010", name: "Office Supplies", confidence: 35 },
+        { category: "5050", name: "Meals & Entertainment", confidence: 35 },
+      ];
+    }
+
+    const expenseCategories = defaultCategories
+      .filter((c) => c.code && c.code.startsWith("5") && c.code !== excludeCode)
+      .slice(0, count);
+
+    return expenseCategories.map((c) => ({
+      category: c.code,
+      name: c.name,
+      confidence: Math.floor(Math.random() * 15) + 25, // 25-40% confidence
+    }));
+  } catch (error) {
+    console.error("Error getting alternative categories:", error);
+    // Return fallback categories
+    return [
+      { category: "5010", name: "Office Supplies", confidence: 35 },
+      { category: "5050", name: "Meals & Entertainment", confidence: 35 },
+      { category: "5060", name: "Professional Services", confidence: 30 },
+    ];
+  }
 }
 
 /**

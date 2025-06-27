@@ -196,10 +196,17 @@ router.get("/export", async (req, res) => {
     if (category) filter.category = category;
     if (vendor) filter.vendor = { $regex: vendor, $options: "i" };
 
+    console.log("Export filter:", filter);
+
     const invoices = await Invoice.find(filter).sort({ date: -1 }).lean();
 
+    // FIXED: Add null check and ensure it's an array
+    const safeInvoices = invoices || [];
+
+    console.log(`Found ${safeInvoices.length} invoices for export`);
+
     if (format === "csv") {
-      const csv = await generateCSV(invoices);
+      const csv = await generateCSV(safeInvoices); // Pass safe array
 
       res.setHeader("Content-Type", "text/csv");
       res.setHeader(
@@ -211,7 +218,7 @@ router.get("/export", async (req, res) => {
       res.send(csv);
     } else {
       res.json({
-        invoices: invoices.map((invoice) => ({
+        invoices: safeInvoices.map((invoice) => ({
           id: invoice._id,
           vendor: invoice.vendor,
           date: invoice.date,
@@ -221,8 +228,8 @@ router.get("/export", async (req, res) => {
           formattedAmount: `${invoice.amount.toFixed(2)}`,
           needsReview: invoice.validationStatus?.needsReview || false,
         })),
-        total: invoices.length,
-        totalAmount: invoices.reduce((sum, inv) => sum + inv.amount, 0),
+        total: safeInvoices.length,
+        totalAmount: safeInvoices.reduce((sum, inv) => sum + inv.amount, 0),
       });
     }
   } catch (error) {
@@ -234,6 +241,64 @@ router.get("/export", async (req, res) => {
   }
 });
 
+/**
+ * Generate CSV from invoices
+ */
+async function generateCSV(invoices) {
+  // FIXED: Add null check and ensure it's an array
+  if (!invoices || !Array.isArray(invoices)) {
+    console.error("generateCSV received invalid invoices parameter:", invoices);
+    invoices = []; // Default to empty array
+  }
+
+  const headers = [
+    "Date",
+    "Vendor",
+    "Amount",
+    "Category Code",
+    "Category Name",
+    "Description",
+    "Tax",
+    "Subtotal",
+    "Needs Review",
+    "File Type",
+    "Confidence",
+    "Created At",
+  ];
+
+  // Import default categories for name lookup
+  const categoryMap = {};
+  try {
+    const { defaultCategories } = require("./categories");
+    if (defaultCategories && Array.isArray(defaultCategories)) {
+      defaultCategories.forEach((cat) => {
+        categoryMap[cat.code] = cat.name;
+      });
+    }
+  } catch (error) {
+    console.error("Error loading categories for CSV:", error);
+  }
+
+  const rows = invoices.map((invoice) => [
+    new Date(invoice.date).toLocaleDateString("en-US"),
+    `"${(invoice.vendor || "Unknown").replace(/"/g, '""')}"`, // Escape quotes
+    (invoice.amount || 0).toFixed(2),
+    invoice.category || "5140",
+    `"${categoryMap[invoice.category] || "Unknown"}"`,
+    `"${(invoice.extractedData?.lineItems || [])
+      .map((item) => item.description || "")
+      .join("; ")
+      .replace(/"/g, '""')}"`,
+    (invoice.extractedData?.tax || 0).toFixed(2),
+    (invoice.extractedData?.subtotal || 0).toFixed(2),
+    invoice.validationStatus?.needsReview ? "Yes" : "No",
+    invoice.fileMetadata?.fileType || "unknown",
+    invoice.validationStatus?.overallConfidence || 0,
+    new Date(invoice.createdAt).toLocaleDateString("en-US"),
+  ]);
+
+  return [headers.join(","), ...rows.map((row) => row.join(","))].join("\n");
+}
 /**
  * GET /api/dashboard/analytics/:type - Get specific analytics
  */
@@ -305,49 +370,49 @@ async function enrichCategoryBreakdown(breakdown) {
 /**
  * Generate CSV from invoices
  */
-async function generateCSV(invoices) {
-  const headers = [
-    "Date",
-    "Vendor",
-    "Amount",
-    "Category Code",
-    "Category Name",
-    "Description",
-    "Tax",
-    "Subtotal",
-    "Needs Review",
-    "File Type",
-    "Confidence",
-    "Created At",
-  ];
+// async function generateCSV(invoices) {
+//   const headers = [
+//     "Date",
+//     "Vendor",
+//     "Amount",
+//     "Category Code",
+//     "Category Name",
+//     "Description",
+//     "Tax",
+//     "Subtotal",
+//     "Needs Review",
+//     "File Type",
+//     "Confidence",
+//     "Created At",
+//   ];
 
-  // Import default categories for name lookup
-  const categoryMap = {};
-  const { defaultCategories } = require("./categories");
-  defaultCategories.forEach((cat) => {
-    categoryMap[cat.code] = cat.name;
-  });
+//   // Import default categories for name lookup
+//   const categoryMap = {};
+//   const { defaultCategories } = require("./categories");
+//   defaultCategories.forEach((cat) => {
+//     categoryMap[cat.code] = cat.name;
+//   });
 
-  const rows = invoices.map((invoice) => [
-    new Date(invoice.date).toLocaleDateString("en-US"),
-    `"${invoice.vendor.replace(/"/g, '""')}"`, // Escape quotes
-    invoice.amount.toFixed(2),
-    invoice.category,
-    `"${categoryMap[invoice.category] || "Unknown"}"`,
-    `"${(invoice.extractedData?.lineItems || [])
-      .map((item) => item.description)
-      .join("; ")
-      .replace(/"/g, '""')}"`,
-    (invoice.extractedData?.tax || 0).toFixed(2),
-    (invoice.extractedData?.subtotal || 0).toFixed(2),
-    invoice.validationStatus?.needsReview ? "Yes" : "No",
-    invoice.fileMetadata?.fileType || "unknown",
-    invoice.validationStatus?.overallConfidence || 0,
-    new Date(invoice.createdAt).toLocaleDateString("en-US"),
-  ]);
+//   const rows = invoices.map((invoice) => [
+//     new Date(invoice.date).toLocaleDateString("en-US"),
+//     `"${invoice.vendor.replace(/"/g, '""')}"`, // Escape quotes
+//     invoice.amount.toFixed(2),
+//     invoice.category,
+//     `"${categoryMap[invoice.category] || "Unknown"}"`,
+//     `"${(invoice.extractedData?.lineItems || [])
+//       .map((item) => item.description)
+//       .join("; ")
+//       .replace(/"/g, '""')}"`,
+//     (invoice.extractedData?.tax || 0).toFixed(2),
+//     (invoice.extractedData?.subtotal || 0).toFixed(2),
+//     invoice.validationStatus?.needsReview ? "Yes" : "No",
+//     invoice.fileMetadata?.fileType || "unknown",
+//     invoice.validationStatus?.overallConfidence || 0,
+//     new Date(invoice.createdAt).toLocaleDateString("en-US"),
+//   ]);
 
-  return [headers.join(","), ...rows.map((row) => row.join(","))].join("\n");
-}
+//   return [headers.join(","), ...rows.map((row) => row.join(","))].join("\n");
+// }
 
 /**
  * Analytics helper functions
