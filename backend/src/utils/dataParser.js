@@ -102,6 +102,165 @@ function extractVendor(text) {
 /**
  * Enhanced line item extraction with better filtering
  */
+// function extractLineItems(text) {
+//   const lines = text.split("\n").map((line) => line.trim());
+//   const items = [];
+
+//   // Patterns to exclude from line items
+//   const excludePatterns = [
+//     /^(subtotal|total|tax|amount due|balance|payment|due|invoice|receipt|bill to|ship to)/i,
+//     /^(date|time|page|address|phone|email|website|url)/i,
+//     /^\d+\s*(usd|eur|inr|gbp)\s+due/i,
+//     /^(pay online|payment method|card ending|expires)/i,
+//     /^(thank you|questions|support|contact|modify|cancel)/i,
+//     /^(you can|for any|please|note:|terms)/i,
+//     /^\w+\s+\d{1,2},?\s+\d{4}$/i, // Dates like "November 5, 2024"
+//     /^\d{4}[-/]\d{1,2}[-/]\d{1,2}/i, // ISO dates
+//     /^[a-zA-Z\s]+,\s+[A-Z]{2}\s+\d{5}/i, // Addresses like "California, CA 94080"
+//     /^(united states|usa|india|canada|uk|australia)$/i,
+//     /^\d+\s+(gateway|main|park|oak|elm|first|second)/i, // Street addresses
+//     /suite\s+\d+/i,
+//     /^\d{5,}$/i, // Long numbers (likely IDs)
+//     /^[A-Z0-9]{10,}$/i, // Alphanumeric IDs
+//     /^(description|qty|quantity|unit price|amount)$/i, // Table headers
+//     /^(igst|cgst|sgst|vat|gst)/i, // Tax labels
+//     /^\(\₹[\d,]+\.\d{2}\)$/i, // Currency conversions like (₹151.49)
+//     /^₹[\d,]+\.\d{2}$/i, // Currency amounts like ₹151.49
+//   ];
+
+//   let i = 0;
+//   while (i < lines.length) {
+//     const line = lines[i];
+
+//     // Skip empty lines and excluded patterns
+//     if (!line || excludePatterns.some((pattern) => pattern.test(line))) {
+//       i++;
+//       continue;
+//     }
+
+//     // Check for "Basic Plan" specifically
+//     if (/^basic plan$/i.test(line)) {
+//       let description = "Basic Plan";
+//       let amount = 0;
+//       let quantity = 1;
+
+//       // Check next 3 lines for date range and amount info
+//       for (let j = 1; j <= 3 && i + j < lines.length; j++) {
+//         const nextLine = lines[i + j];
+
+//         // Look for date range like "Nov 5 – Dec 5, 2024"
+//         if (/\w{3}\s+\d+\s+[–-]\s+\w{3}\s+\d+,?\s+\d{4}/.test(nextLine)) {
+//           description += ` ${nextLine}`;
+//         }
+
+//         // Look for the specific pattern from your extracted text: "1$10.0018%$10.00"
+//         const compactAmountMatch = nextLine.match(
+//           /^(\d+)\$(\d+(?:\.\d{2})?)\d+%\$(\d+(?:\.\d{2}))$/
+//         );
+//         if (compactAmountMatch) {
+//           quantity = parseInt(compactAmountMatch[1]);
+//           amount = parseFloat(compactAmountMatch[3]); // Use the final amount ($10.00)
+//           break;
+//         }
+
+//         // Also try the spaced pattern "1 $10.00 18% $10.00"
+//         const spacedAmountMatch = nextLine.match(
+//           /(\d+)\s+\$(\d+(?:\.\d{2})?)\s+\d+%\s+\$(\d+(?:\.\d{2})?)/
+//         );
+//         if (spacedAmountMatch) {
+//           quantity = parseInt(spacedAmountMatch[1]);
+//           amount = parseFloat(spacedAmountMatch[3]);
+//           break;
+//         }
+
+//         // Fallback: look for any dollar amount in the line
+//         const fallbackAmountMatch = nextLine.match(/\$(\d+(?:\.\d{2})?)/);
+//         if (fallbackAmountMatch && !amount) {
+//           amount = parseFloat(fallbackAmountMatch[1]);
+//         }
+//       }
+
+//       if (amount > 0) {
+//         items.push({
+//           description: description.trim(),
+//           amount: amount,
+//           quantity: quantity,
+//         });
+//       }
+
+//       i += 4; // Skip the lines we've processed
+//       continue;
+//     }
+
+//     // Try other standard patterns for different invoice formats
+//     const patterns = [
+//       // "Item Name $10.00"
+//       /^(.+?)\s+\$(\d+(?:\.\d{2})?)\s*$/,
+//       // "Item Name    Qty    Price    Amount" (table row)
+//       /^(.+?)\s+(\d+)\s+\$(\d+(?:\.\d{2})?)\s+\$(\d+(?:\.\d{2})?)\s*$/,
+//     ];
+
+//     for (const pattern of patterns) {
+//       const match = line.match(pattern);
+//       if (match) {
+//         if (match.length === 3) {
+//           // Simple pattern: description + amount
+//           const [, description, amount] = match;
+//           const cleanDescription = description.trim();
+//           const numAmount = parseFloat(amount);
+
+//           if (
+//             cleanDescription.length > 0 &&
+//             numAmount > 0 &&
+//             numAmount < 100000
+//           ) {
+//             if (
+//               !/(total|subtotal|tax|igst|cgst|sgst|vat|discount)$/i.test(
+//                 cleanDescription
+//               )
+//             ) {
+//               items.push({
+//                 description: cleanDescription,
+//                 amount: numAmount,
+//                 quantity: 1,
+//               });
+//             }
+//           }
+//         } else if (match.length === 5) {
+//           // Table pattern: description + qty + unit price + total
+//           const [, description, qty, unitPrice, totalAmount] = match;
+//           const cleanDescription = description.trim();
+//           const quantity = parseInt(qty);
+//           const total = parseFloat(totalAmount);
+
+//           if (
+//             cleanDescription.length > 0 &&
+//             quantity > 0 &&
+//             total > 0 &&
+//             total < 100000
+//           ) {
+//             if (
+//               !/(total|subtotal|tax|igst|cgst|sgst|vat|discount)$/i.test(
+//                 cleanDescription
+//               )
+//             ) {
+//               items.push({
+//                 description: cleanDescription,
+//                 amount: total,
+//                 quantity: quantity,
+//               });
+//             }
+//           }
+//         }
+//         break; // Found a match, move to next line
+//       }
+//     }
+
+//     i++;
+//   }
+
+//   return items;
+// }
 function extractLineItems(text) {
   const lines = text.split("\n").map((line) => line.trim());
   const items = [];
@@ -126,6 +285,9 @@ function extractLineItems(text) {
     /^(igst|cgst|sgst|vat|gst)/i, // Tax labels
     /^\(\₹[\d,]+\.\d{2}\)$/i, // Currency conversions like (₹151.49)
     /^₹[\d,]+\.\d{2}$/i, // Currency amounts like ₹151.49
+    /^(discounts?|gratuity|tip|change due)/i, // Add discount and gratuity to exclusions
+    /^(starbucks|store|order|driver|reg|duplicate receipt)/i, // Store headers
+    /^[A-Z]{3}\s+\d{6}$/i, // Order numbers like "OOK 667431"
   ];
 
   let i = 0;
@@ -194,17 +356,48 @@ function extractLineItems(text) {
 
     // Try other standard patterns for different invoice formats
     const patterns = [
-      // "Item Name $10.00"
-      /^(.+?)\s+\$(\d+(?:\.\d{2})?)\s*$/,
+      // "Item Name $10.00" - but with more flexible whitespace
+      /^(.+?)\s+(\d+(?:\.\d{2})?)\s*$/,
       // "Item Name    Qty    Price    Amount" (table row)
       /^(.+?)\s+(\d+)\s+\$(\d+(?:\.\d{2})?)\s+\$(\d+(?:\.\d{2})?)\s*$/,
+      // Standard pattern with dollar sign
+      /^(.+?)\s+\$(\d+(?:\.\d{2})?)\s*$/,
     ];
+
+    let foundMatch = false;
 
     for (const pattern of patterns) {
       const match = line.match(pattern);
       if (match) {
-        if (match.length === 3) {
-          // Simple pattern: description + amount
+        if (pattern === patterns[0]) {
+          // Pattern without dollar sign - need to verify the second part is actually a price
+          const [, description, amount] = match;
+          const cleanDescription = description.trim();
+          const numAmount = parseFloat(amount);
+
+          // Make sure the amount looks like a price (has decimal or is reasonable)
+          if (
+            cleanDescription.length > 0 &&
+            numAmount > 0 &&
+            numAmount < 100000 &&
+            (amount.includes(".") || numAmount < 1000) // Either has decimal or is under $1000
+          ) {
+            // Additional check: make sure the description doesn't end with common non-item words
+            if (
+              !/(total|subtotal|tax|igst|cgst|sgst|vat|discount|gratuity|tip|discounts?)$/i.test(
+                cleanDescription
+              )
+            ) {
+              items.push({
+                description: cleanDescription,
+                amount: numAmount,
+                quantity: 1,
+              });
+              foundMatch = true;
+            }
+          }
+        } else if (match.length === 3) {
+          // Simple pattern: description + amount with dollar sign
           const [, description, amount] = match;
           const cleanDescription = description.trim();
           const numAmount = parseFloat(amount);
@@ -215,7 +408,7 @@ function extractLineItems(text) {
             numAmount < 100000
           ) {
             if (
-              !/(total|subtotal|tax|igst|cgst|sgst|vat|discount)$/i.test(
+              !/(total|subtotal|tax|igst|cgst|sgst|vat|discount|gratuity|tip|discounts?)$/i.test(
                 cleanDescription
               )
             ) {
@@ -224,6 +417,7 @@ function extractLineItems(text) {
                 amount: numAmount,
                 quantity: 1,
               });
+              foundMatch = true;
             }
           }
         } else if (match.length === 5) {
@@ -240,7 +434,7 @@ function extractLineItems(text) {
             total < 100000
           ) {
             if (
-              !/(total|subtotal|tax|igst|cgst|sgst|vat|discount)$/i.test(
+              !/(total|subtotal|tax|igst|cgst|sgst|vat|discount|gratuity|tip|discounts?)$/i.test(
                 cleanDescription
               )
             ) {
@@ -249,10 +443,12 @@ function extractLineItems(text) {
                 amount: total,
                 quantity: quantity,
               });
+              foundMatch = true;
             }
           }
         }
-        break; // Found a match, move to next line
+
+        if (foundMatch) break; // Found a match, move to next line
       }
     }
 
@@ -261,7 +457,6 @@ function extractLineItems(text) {
 
   return items;
 }
-
 /**
  * Improved amount extraction - get the final total
  */
