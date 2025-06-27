@@ -1,6 +1,6 @@
 const express = require("express");
 const Invoice = require("../models/Invoice");
-
+const Category = require("../models/Category");
 const router = express.Router();
 
 /**
@@ -244,6 +244,9 @@ router.get("/export", async (req, res) => {
 /**
  * Generate CSV from invoices
  */
+/**
+ * Generate CSV from invoices
+ */
 async function generateCSV(invoices) {
   // FIXED: Add null check and ensure it's an array
   if (!invoices || !Array.isArray(invoices)) {
@@ -266,17 +269,37 @@ async function generateCSV(invoices) {
     "Created At",
   ];
 
-  // Import default categories for name lookup
+  // FIXED: Get categories from database instead of trying to import
   const categoryMap = {};
   try {
-    const { defaultCategories } = require("./categories");
-    if (defaultCategories && Array.isArray(defaultCategories)) {
-      defaultCategories.forEach((cat) => {
+    const categories = await Category.find({ isActive: true }).lean();
+
+    if (categories && Array.isArray(categories)) {
+      categories.forEach((cat) => {
         categoryMap[cat.code] = cat.name;
       });
+      console.log(`Loaded ${categories.length} categories for CSV export`);
     }
   } catch (error) {
-    console.error("Error loading categories for CSV:", error);
+    console.error("Error loading categories from database for CSV:", error);
+    // Fallback to hardcoded categories if database fails
+    const fallbackCategories = {
+      5010: "Office Supplies",
+      5020: "Software Subscriptions",
+      5030: "Internet & Phone",
+      5040: "Travel & Transportation",
+      5050: "Meals & Entertainment",
+      5060: "Professional Services",
+      5070: "Marketing & Advertising",
+      5080: "Rent & Utilities",
+      5090: "Insurance",
+      5100: "Equipment & Technology",
+      5110: "Maintenance & Repairs",
+      5120: "Training & Education",
+      5130: "Bank Fees",
+      5140: "Miscellaneous Expenses",
+    };
+    Object.assign(categoryMap, fallbackCategories);
   }
 
   const rows = invoices.map((invoice) => [
@@ -284,7 +307,7 @@ async function generateCSV(invoices) {
     `"${(invoice.vendor || "Unknown").replace(/"/g, '""')}"`, // Escape quotes
     (invoice.amount || 0).toFixed(2),
     invoice.category || "5140",
-    `"${categoryMap[invoice.category] || "Unknown"}"`,
+    `"${categoryMap[invoice.category] || "Unknown Category"}"`, // This should now work
     `"${(invoice.extractedData?.lineItems || [])
       .map((item) => item.description || "")
       .join("; ")
