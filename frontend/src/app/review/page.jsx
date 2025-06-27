@@ -173,7 +173,23 @@ export default function ReviewPage() {
 
     try {
       setBulkActionLoading(true);
-      await bulkActionInvoices("markReviewed", selectedInvoices);
+
+      // Use the markReviewed action instead of a generic one
+      const response = await fetch("/api/invoices/bulk-action", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          action: "markReviewed",
+          invoiceIds: selectedInvoices,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to approve invoices");
+      }
+
       toast.success(`Approved ${selectedInvoices.length} invoice(s)`);
       loadReviewInvoices();
       setSelectedInvoices([]);

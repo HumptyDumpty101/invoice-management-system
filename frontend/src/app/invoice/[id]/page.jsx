@@ -35,6 +35,7 @@ import {
   formatDateTime,
   getConfidenceColor,
   getConfidenceLevel,
+  markInvoiceAsReviewed,
 } from "../../../lib/api";
 import toast from "react-hot-toast";
 
@@ -54,6 +55,7 @@ export default function InvoiceEditPage({ params }) {
   const [validationErrors, setValidationErrors] = useState({});
   const [categoryPrediction, setCategoryPrediction] = useState(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [markingAsReviewed, setMarkingAsReviewed] = useState(false);
 
   useEffect(() => {
     if (params.id) {
@@ -93,6 +95,25 @@ export default function InvoiceEditPage({ params }) {
       setCategories(data.categories);
     } catch (error) {
       console.error("Failed to load categories:", error);
+    }
+  };
+
+  const handleMarkAsReviewed = async () => {
+    if (!invoice) return;
+
+    try {
+      setMarkingAsReviewed(true);
+      const result = await markInvoiceAsReviewed(invoice._id);
+      setInvoice(result.invoice);
+      toast.success("Invoice marked as reviewed");
+
+      // Optionally redirect to dashboard after marking as reviewed
+      // router.push("/dashboard");
+    } catch (error) {
+      console.error("Failed to mark as reviewed:", error);
+      toast.error(error.message || "Failed to mark as reviewed");
+    } finally {
+      setMarkingAsReviewed(false);
     }
   };
 
@@ -405,6 +426,25 @@ export default function InvoiceEditPage({ params }) {
         </div>
 
         <div className="flex items-center space-x-3">
+          {!isEditing && needsReview && (
+            <button
+              onClick={handleMarkAsReviewed}
+              disabled={markingAsReviewed}
+              className="btn-primary bg-green-600 hover:bg-green-700 disabled:opacity-50"
+            >
+              {markingAsReviewed ? (
+                <>
+                  <div className="spinner w-4 h-4 mr-2"></div>
+                  Marking...
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="w-4 h-4 mr-2" />
+                  Mark as Reviewed
+                </>
+              )}
+            </button>
+          )}
           {!isEditing && (
             <button
               onClick={() => setIsEditing(true)}
@@ -442,6 +482,16 @@ export default function InvoiceEditPage({ params }) {
                 )}
               </button>
             </>
+          )}
+
+          {!isEditing && needsReview && (
+            <button
+              onClick={handleMarkAsReviewed}
+              className="btn-primary bg-green-600 hover:bg-green-700"
+            >
+              <CheckCircle className="w-4 h-4 mr-2" />
+              Mark as Reviewed
+            </button>
           )}
 
           <button

@@ -312,3 +312,8 @@ export async function checkAPIStatus() {
     };
   }
 }
+
+export async function markInvoiceAsReviewed(id) {
+  const response = await api.patch(`/invoices/${id}/mark-reviewed`);
+  return response.data;
+}

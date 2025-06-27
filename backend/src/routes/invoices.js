@@ -149,6 +149,7 @@ router.get("/:id", async (req, res) => {
 /**
  * PUT /api/invoices/:id - Update invoice with learning
  */
+
 router.put("/:id", async (req, res) => {
   try {
     const invoice = await Invoice.findById(req.params.id);
@@ -189,40 +190,20 @@ router.put("/:id", async (req, res) => {
         validation.data.category &&
         validation.data.category !== previousCategory
       ) {
-        // This is a user correction - very important for learning!
         await updateVendorLearning(
           invoice.vendor,
           validation.data.category,
           invoice.amount,
-          true // User corrected
+          true
         );
 
         console.log(
           `User corrected category for ${invoice.vendor}: ${previousCategory} -> ${validation.data.category}`
         );
-
-        // Optionally, reduce confidence for the previous incorrect category
-        const normalizedVendor = invoice.vendor
-          .toLowerCase()
-          .replace(/[^a-z0-9\s]/g, "")
-          .replace(/\s+/g, " ")
-          .trim();
-
-        await VendorMapping.updateMany(
-          {
-            normalizedVendor: normalizedVendor,
-            category: previousCategory,
-          },
-          {
-            $mul: { confidence: 0.8 }, // Reduce confidence by 20% for wrong category
-            $inc: { userCorrections: -1 }, // Track that this was wrong
-          }
-        );
       }
 
       // Update vendor name if changed
       if (validation.data.vendor && validation.data.vendor !== invoice.vendor) {
-        // Learn the new vendor-category mapping
         await updateVendorLearning(
           validation.data.vendor,
           validation.data.category || invoice.category,
@@ -235,28 +216,45 @@ router.put("/:id", async (req, res) => {
     // Update invoice fields
     Object.assign(invoice, validation.data);
 
-    // Re-validate after update
-    const { validateInvoiceData } = require("../utils/validation");
-    const newValidation = await validateInvoiceData(
-      {
-        vendor: invoice.vendor,
-        date: invoice.date,
-        amount: invoice.amount,
-        lineItems: invoice.extractedData.lineItems,
-        tax: invoice.extractedData.tax,
-        subtotal: invoice.extractedData.subtotal,
-      },
-      invoice.fileMetadata
-    );
+    // **KEY FIX**: When user edits and saves, mark as reviewed
+    // Only re-validate if this is NOT a user correction
+    if (hasChanges) {
+      // User made changes - this means they reviewed it
+      invoice.validationStatus = {
+        dateValid: true, // User confirmed these are correct
+        amountValid: true,
+        vendorValid: true,
+        overallConfidence: Math.max(
+          80,
+          invoice.validationStatus?.overallConfidence || 80
+        ), // Boost confidence
+        issues: [], // Clear issues since user reviewed
+        needsReview: false, // **CRITICAL**: Mark as reviewed
+      };
+    } else {
+      // No changes made, just re-validate
+      const { validateInvoiceData } = require("../utils/validation");
+      const newValidation = await validateInvoiceData(
+        {
+          vendor: invoice.vendor,
+          date: invoice.date,
+          amount: invoice.amount,
+          lineItems: invoice.extractedData.lineItems,
+          tax: invoice.extractedData.tax,
+          subtotal: invoice.extractedData.subtotal,
+        },
+        invoice.fileMetadata
+      );
 
-    invoice.validationStatus = {
-      dateValid: newValidation.dateValid,
-      amountValid: newValidation.amountValid,
-      vendorValid: newValidation.vendorValid,
-      overallConfidence: newValidation.overallConfidence,
-      issues: newValidation.issues,
-      needsReview: newValidation.needsReview,
-    };
+      invoice.validationStatus = {
+        dateValid: newValidation.dateValid,
+        amountValid: newValidation.amountValid,
+        vendorValid: newValidation.vendorValid,
+        overallConfidence: newValidation.overallConfidence,
+        issues: newValidation.issues,
+        needsReview: newValidation.needsReview,
+      };
+    }
 
     await invoice.save();
 
@@ -268,7 +266,9 @@ router.put("/:id", async (req, res) => {
         formattedAmount: `${invoice.amount.toFixed(2)}`,
         requiresReview: invoice.requiresReview(),
       },
-      message: hasChanges ? "Invoice updated successfully" : "No changes made",
+      message: hasChanges
+        ? "Invoice updated and marked as reviewed"
+        : "No changes made",
     });
   } catch (error) {
     console.error("Error updating invoice:", error);
@@ -279,6 +279,54 @@ router.put("/:id", async (req, res) => {
   }
 });
 
+// route to mark invoices as reviewed without other changes
+router.patch("/:id/mark-reviewed", async (req, res) => {
+  try {
+    const invoice = await Invoice.findById(req.params.id);
+
+    if (!invoice) {
+      return res.status(404).json({
+        error: "Invoice not found",
+      });
+    }
+
+    // Mark as reviewed by user
+    invoice.validationStatus.needsReview = false;
+    invoice.userCorrected = true;
+
+    // Boost confidence since user reviewed it
+    if (invoice.validationStatus.overallConfidence < 80) {
+      invoice.validationStatus.overallConfidence = 80;
+    }
+
+    // Clear issues that would cause review flags
+    invoice.validationStatus.issues = invoice.validationStatus.issues.filter(
+      (issue) =>
+        !issue.toLowerCase().includes("review") &&
+        !issue.toLowerCase().includes("verify") &&
+        !issue.toLowerCase().includes("confidence")
+    );
+
+    await invoice.save();
+
+    res.json({
+      success: true,
+      message: "Invoice marked as reviewed",
+      invoice: {
+        ...invoice.toObject(),
+        formattedDate: invoice.date.toLocaleDateString("en-US"),
+        formattedAmount: `${invoice.amount.toFixed(2)}`,
+        requiresReview: invoice.requiresReview(),
+      },
+    });
+  } catch (error) {
+    console.error("Error marking invoice as reviewed:", error);
+    res.status(500).json({
+      error: "Failed to mark invoice as reviewed",
+      message: error.message,
+    });
+  }
+});
 /**
  * DELETE /api/invoices/:id - Delete invoice
  */
@@ -566,6 +614,22 @@ async function bulkMarkReviewed(invoiceIds) {
       $set: {
         "validationStatus.needsReview": false,
         userCorrected: true,
+      },
+      // Boost confidence for reviewed invoices
+      $max: {
+        "validationStatus.overallConfidence": 80,
+      },
+    }
+  );
+
+  // Also clear review-related issues
+  await Invoice.updateMany(
+    { _id: { $in: invoiceIds } },
+    {
+      $pull: {
+        "validationStatus.issues": {
+          $regex: /(review|verify|confidence)/i,
+        },
       },
     }
   );
