@@ -33,7 +33,6 @@ app.use(express.urlencoded({ limit: "10mb", extended: true }));
 app.use("/uploads", express.static("uploads"));
 
 // Routes
-// TODO:
 app.use("/api/upload", require("./routes/upload"));
 app.use("/api/invoices", require("./routes/invoices"));
 app.use("/api/categories", require("./routes/categories"));
@@ -83,23 +82,44 @@ app.use((req, res) => {
   });
 });
 
-// DB Connection
-mongoose
-  .connect(process.env.MONGODB_URI, {})
-  .then(() => {
+// Initialize database and seed categories
+async function initializeDatabase() {
+  try {
+    await mongoose.connect(process.env.MONGODB_URI);
     console.log("Connected to MongoDB");
 
+    // Seed default categories if they don't exist
+    const Category = require("./models/Category");
+    const categoryCount = await Category.countDocuments({ isActive: true });
+
+    if (categoryCount === 0) {
+      console.log("No categories found, seeding default categories...");
+      await Category.seedDefaultCategories();
+      console.log(" Default categories seeded successfully");
+    } else {
+      console.log(` Found ${categoryCount} existing categories`);
+    }
+  } catch (err) {
+    console.error("❌ Database initialization error:", err);
+    throw err;
+  }
+}
+
+// DB Connection and Server Start
+initializeDatabase()
+  .then(() => {
     // Start Server
     app.listen(PORT, () => {
       console.log(`Server started on port ${PORT}`);
+      console.log(`   - Health: http://localhost:${PORT}/api/health`);
     });
   })
   .catch((err) => {
-    console.log(`MongoDB Connection Error : ${err}`);
+    console.error("❌ Failed to start server:", err);
     process.exit(1);
   });
 
-//   Graceful Shutdown
+// Graceful Shutdown
 process.on("SIGTERM", () => {
   console.log("SIGTERM signal received: closing HTTP server");
   mongoose.connection.close(() => {

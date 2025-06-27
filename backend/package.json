@@ -6,6 +6,8 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
+    "seed": "node src/utils/seedDatabase.js",
+    "seed:categories": "node -e \"require('./src/models/Category').seedDefaultCategories().then(() => process.exit(0))\"",
     "init-learning": "node src/utils/initializeLearning.js",
     "test-prediction": "node src/utils/testPrediction.js",
     "reset-learning": "node -e \"require('mongoose').connect(process.env.MONGODB_URI).then(async () => { await require('./src/models/VendorMapping').deleteMany({}); console.log('Learning data reset'); process.exit(0); })\"",
@@ -16,7 +18,8 @@
     "cleanup:help": "node cleanup.js --help",
     "reset:complete": "node cleanup.js --confirm",
     "reset:db-only": "node cleanup.js --confirm --keep-uploads",
-    "reset:preview": "node cleanup.js --dry-run"
+    "reset:preview": "node cleanup.js --dry-run",
+    "setup": "npm run seed && npm run init-learning"
   },
   "author": "",
   "license": "ISC",

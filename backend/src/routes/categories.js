@@ -1,175 +1,22 @@
 const express = require("express");
+const Category = require("../models/Category");
 const { validateCategoryCode } = require("../utils/validation");
 
 const router = express.Router();
 
-// Default chart of accounts categories
-const defaultCategories = [
-  // Assets
-  {
-    code: "1000",
-    name: "Business Checking",
-    description: "Primary business bank account",
-    isDefault: true,
-  },
-  {
-    code: "1100",
-    name: "Accounts Receivable",
-    description: "Money owed by customers",
-    isDefault: true,
-  },
-  {
-    code: "1200",
-    name: "Inventory",
-    description: "Products for sale",
-    isDefault: true,
-  },
-  {
-    code: "1300",
-    name: "Equipment",
-    description: "Business equipment and machinery",
-    isDefault: true,
-  },
-
-  // Liabilities
-  {
-    code: "2000",
-    name: "Accounts Payable",
-    description: "Money owed to vendors",
-    isDefault: true,
-  },
-  {
-    code: "2100",
-    name: "Credit Card",
-    description: "Business credit card balances",
-    isDefault: true,
-  },
-  {
-    code: "2200",
-    name: "Loans Payable",
-    description: "Business loans and financing",
-    isDefault: true,
-  },
-
-  // Equity
-  {
-    code: "3000",
-    name: "Owner Equity",
-    description: "Owner investment and retained earnings",
-    isDefault: true,
-  },
-
-  // Revenue
-  {
-    code: "4000",
-    name: "Sales Revenue",
-    description: "Income from sales",
-    isDefault: true,
-  },
-  {
-    code: "4100",
-    name: "Service Revenue",
-    description: "Income from services",
-    isDefault: true,
-  },
-
-  // Expenses (Most commonly used for invoices)
-  {
-    code: "5010",
-    name: "Office Supplies",
-    description: "Pens, paper, printer cartridges, basic office items",
-    isDefault: true,
-  },
-  {
-    code: "5020",
-    name: "Software Subscriptions",
-    description: "Adobe, Microsoft, Slack, SaaS tools",
-    isDefault: true,
-  },
-  {
-    code: "5030",
-    name: "Internet & Phone",
-    description: "Comcast, AT&T, Zoom, communication services",
-    isDefault: true,
-  },
-  {
-    code: "5040",
-    name: "Travel & Transportation",
-    description: "Flights, Uber, parking, business travel",
-    isDefault: true,
-  },
-  {
-    code: "5050",
-    name: "Meals & Entertainment",
-    description: "Client dinners, team lunches, business meals",
-    isDefault: true,
-  },
-  {
-    code: "5060",
-    name: "Professional Services",
-    description: "Legal, accounting, consulting, contractors",
-    isDefault: true,
-  },
-  {
-    code: "5070",
-    name: "Marketing & Advertising",
-    description: "Google Ads, Facebook, print materials, promotion",
-    isDefault: true,
-  },
-  {
-    code: "5080",
-    name: "Rent & Utilities",
-    description: "Office rent, electricity, water, gas",
-    isDefault: true,
-  },
-  {
-    code: "5090",
-    name: "Insurance",
-    description: "Business insurance, liability, property coverage",
-    isDefault: true,
-  },
-  {
-    code: "5100",
-    name: "Equipment & Technology",
-    description: "Computers, software, hardware purchases",
-    isDefault: true,
-  },
-  {
-    code: "5110",
-    name: "Maintenance & Repairs",
-    description: "Equipment repairs, building maintenance",
-    isDefault: true,
-  },
-  {
-    code: "5120",
-    name: "Training & Education",
-    description: "Courses, books, professional development",
-    isDefault: true,
-  },
-  {
-    code: "5130",
-    name: "Bank Fees",
-    description: "Transaction fees, service charges",
-    isDefault: true,
-  },
-  {
-    code: "5140",
-    name: "Miscellaneous Expenses",
-    description: "Other business expenses",
-    isDefault: true,
-  },
-];
-
 /**
- * GET /api/categories - Get all categories
+ * GET /api/categories - Get all categories from database
  */
 router.get("/", async (req, res) => {
   try {
-    const categories = defaultCategories.map((cat) => ({
-      ...cat,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    }));
+    // Get categories from database, fallback to seeding if empty
+    let categories = await Category.find({ isActive: true }).sort({ code: 1 });
+
+    // If no categories exist, seed default ones
+    if (categories.length === 0) {
+      await Category.seedDefaultCategories();
+      categories = await Category.find({ isActive: true }).sort({ code: 1 });
+    }
 
     // Group by type for easier UI display
     const grouped = {
@@ -181,7 +28,17 @@ router.get("/", async (req, res) => {
     };
 
     res.json({
-      categories,
+      categories: categories.map((cat) => ({
+        code: cat.code,
+        name: cat.name,
+        description: cat.description,
+        isDefault: cat.isDefault,
+        color: cat.color,
+        usageCount: cat.usageCount,
+        type: cat.getCategoryType(),
+        createdAt: cat.createdAt,
+        updatedAt: cat.updatedAt,
+      })),
       grouped,
       total: categories.length,
     });
@@ -195,16 +52,32 @@ router.get("/", async (req, res) => {
 });
 
 /**
- * GET /api/categories/expenses - Get expense categories only (most used for invoices)
+ * GET /api/categories/expenses - Get expense categories only
  */
 router.get("/expenses", async (req, res) => {
   try {
-    const expenseCategories = defaultCategories
-      .filter((cat) => cat.code.startsWith("5"))
-      .sort((a, b) => a.name.localeCompare(b.name));
+    let expenseCategories = await Category.find({
+      code: /^5/,
+      isActive: true,
+    }).sort({ name: 1 });
+
+    // Seed if empty
+    if (expenseCategories.length === 0) {
+      await Category.seedDefaultCategories();
+      expenseCategories = await Category.find({
+        code: /^5/,
+        isActive: true,
+      }).sort({ name: 1 });
+    }
 
     res.json({
-      categories: expenseCategories,
+      categories: expenseCategories.map((cat) => ({
+        code: cat.code,
+        name: cat.name,
+        description: cat.description,
+        isDefault: cat.isDefault,
+        usageCount: cat.usageCount,
+      })),
     });
   } catch (error) {
     console.error("Error fetching expense categories:", error);
@@ -222,7 +95,7 @@ router.get("/:code", async (req, res) => {
   try {
     const { code } = req.params;
 
-    const category = defaultCategories.find((cat) => cat.code === code);
+    const category = await Category.findOne({ code, isActive: true });
 
     if (!category) {
       return res.status(404).json({
@@ -231,9 +104,15 @@ router.get("/:code", async (req, res) => {
     }
 
     res.json({
-      ...category,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      code: category.code,
+      name: category.name,
+      description: category.description,
+      isDefault: category.isDefault,
+      color: category.color,
+      usageCount: category.usageCount,
+      type: category.getCategoryType(),
+      createdAt: category.createdAt,
+      updatedAt: category.updatedAt,
     });
   } catch (error) {
     console.error("Error fetching category:", error);
@@ -245,11 +124,11 @@ router.get("/:code", async (req, res) => {
 });
 
 /**
- * POST /api/categories - Create new category (for future enhancement)
+ * POST /api/categories - Create new category (FIXED)
  */
 router.post("/", async (req, res) => {
   try {
-    const { code, name, description } = req.body;
+    const { code, name, description, color } = req.body;
 
     // Validate category code
     const codeValidation = validateCategoryCode(code);
@@ -261,8 +140,8 @@ router.post("/", async (req, res) => {
     }
 
     // Check if category already exists
-    const exists = defaultCategories.find((cat) => cat.code === code);
-    if (exists) {
+    const existingCategory = await Category.findOne({ code });
+    if (existingCategory) {
       return res.status(409).json({
         error: "Category already exists",
         message: `Category with code ${code} already exists`,
@@ -277,24 +156,44 @@ router.post("/", async (req, res) => {
       });
     }
 
-    // For MVP, we'll simulate creation but not persist
-    const newCategory = {
-      code,
+    // Create new category in database
+    const newCategory = new Category({
+      code: code.trim(),
       name: name.trim(),
       description: description ? description.trim() : "",
+      color: color || "#3b82f6",
       isDefault: false,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
+      isActive: true,
+      usageCount: 0,
+    });
+
+    await newCategory.save();
 
     res.status(201).json({
       success: true,
-      category: newCategory,
-      message:
-        "Category created successfully (note: MVP does not persist custom categories)",
+      category: {
+        code: newCategory.code,
+        name: newCategory.name,
+        description: newCategory.description,
+        isDefault: newCategory.isDefault,
+        color: newCategory.color,
+        type: newCategory.getCategoryType(),
+        createdAt: newCategory.createdAt,
+        updatedAt: newCategory.updatedAt,
+      },
+      message: "Category created successfully",
     });
   } catch (error) {
     console.error("Error creating category:", error);
+
+    // Handle duplicate key error
+    if (error.code === 11000) {
+      return res.status(409).json({
+        error: "Category already exists",
+        message: "A category with this code already exists",
+      });
+    }
+
     res.status(500).json({
       error: "Failed to create category",
       message: error.message,
@@ -303,14 +202,14 @@ router.post("/", async (req, res) => {
 });
 
 /**
- * PUT /api/categories/:code - Update category (for future enhancement)
+ * PUT /api/categories/:code - Update category (FIXED)
  */
 router.put("/:code", async (req, res) => {
   try {
     const { code } = req.params;
-    const { name, description } = req.body;
+    const { name, description, color } = req.body;
 
-    const category = defaultCategories.find((cat) => cat.code === code);
+    const category = await Category.findOne({ code, isActive: true });
 
     if (!category) {
       return res.status(404).json({
@@ -318,14 +217,7 @@ router.put("/:code", async (req, res) => {
       });
     }
 
-    if (category.isDefault) {
-      return res.status(400).json({
-        error: "Cannot modify default categories",
-        message: "Default categories cannot be modified in MVP",
-      });
-    }
-
-    // Validate name
+    // Validate name if provided
     if (name && name.trim().length < 2) {
       return res.status(400).json({
         error: "Invalid category name",
@@ -333,19 +225,25 @@ router.put("/:code", async (req, res) => {
       });
     }
 
-    const updatedCategory = {
-      ...category,
-      name: name ? name.trim() : category.name,
-      description:
-        description !== undefined ? description.trim() : category.description,
-      updatedAt: new Date(),
-    };
+    // Update category
+    if (name) category.name = name.trim();
+    if (description !== undefined) category.description = description.trim();
+    if (color) category.color = color;
+
+    await category.save();
 
     res.json({
       success: true,
-      category: updatedCategory,
-      message:
-        "Category updated successfully (note: MVP does not persist changes)",
+      category: {
+        code: category.code,
+        name: category.name,
+        description: category.description,
+        isDefault: category.isDefault,
+        color: category.color,
+        type: category.getCategoryType(),
+        updatedAt: category.updatedAt,
+      },
+      message: "Category updated successfully",
     });
   } catch (error) {
     console.error("Error updating category:", error);
@@ -357,13 +255,13 @@ router.put("/:code", async (req, res) => {
 });
 
 /**
- * DELETE /api/categories/:code - Delete category (for future enhancement)
+ * DELETE /api/categories/:code - Delete category (FIXED)
  */
 router.delete("/:code", async (req, res) => {
   try {
     const { code } = req.params;
 
-    const category = defaultCategories.find((cat) => cat.code === code);
+    const category = await Category.findOne({ code, isActive: true });
 
     if (!category) {
       return res.status(404).json({
@@ -378,10 +276,24 @@ router.delete("/:code", async (req, res) => {
       });
     }
 
+    // Check if category is being used by any invoices
+    const Invoice = require("../models/Invoice");
+    const usageCount = await Invoice.countDocuments({ category: code });
+
+    if (usageCount > 0) {
+      return res.status(400).json({
+        error: "Category is in use",
+        message: `Cannot delete category that is used by ${usageCount} invoice(s)`,
+      });
+    }
+
+    // Soft delete by setting isActive to false
+    category.isActive = false;
+    await category.save();
+
     res.json({
       success: true,
-      message:
-        "Category deleted successfully (note: MVP does not persist changes)",
+      message: "Category deleted successfully",
     });
   } catch (error) {
     console.error("Error deleting category:", error);
@@ -394,7 +306,6 @@ router.delete("/:code", async (req, res) => {
 
 /**
  * GET /api/categories/predict/:vendor - Predict category for vendor
- * UPDATED: Removed all amount-based restrictions
  */
 router.get("/predict/:vendor", async (req, res) => {
   try {
@@ -425,7 +336,7 @@ router.get("/predict/:vendor", async (req, res) => {
 });
 
 /**
- * Enhanced category prediction logic - REMOVED amount-based restrictions
+ * Enhanced category prediction using database categories
  */
 async function predictCategoryForVendor(vendor, amount) {
   const vendorLower = vendor.toLowerCase();
@@ -435,10 +346,12 @@ async function predictCategoryForVendor(vendor, amount) {
   const learnedPrediction = await VendorMapping.predictCategory(vendor, amount);
 
   if (learnedPrediction && learnedPrediction.confidence >= 50) {
-    // Use learned prediction if confidence is reasonable
-    const category = defaultCategories.find(
-      (c) => c.code === learnedPrediction.category
-    );
+    // Get category from database
+    const category = await Category.findOne({
+      code: learnedPrediction.category,
+      isActive: true,
+    });
+
     return {
       category: learnedPrediction.category,
       name: category ? category.name : "Unknown Category",
@@ -448,243 +361,93 @@ async function predictCategoryForVendor(vendor, amount) {
     };
   }
 
-  // Enhanced rule-based predictions for NEW vendors - NO AMOUNT RESTRICTIONS
+  // Enhanced rule-based predictions for NEW vendors
   const rules = [
     // Technology & Software
     {
       pattern: /\b(midjourney|openai|chatgpt|claude|anthropic)\b/i,
       category: "5020",
-      name: "Software Subscriptions",
       confidence: 95,
     },
     {
       pattern: /amazon\s*(web\s*services|aws)|amzn.*aws/i,
       category: "5020",
-      name: "Software Subscriptions",
       confidence: 95,
     },
     {
       pattern: /amazon|amzn(?!.*aws)/i,
       category: "5010",
-      name: "Office Supplies",
       confidence: 75,
     },
     {
       pattern:
         /microsoft|adobe|slack|zoom|dropbox|google\s*(workspace|cloud)|github/i,
       category: "5020",
-      name: "Software Subscriptions",
       confidence: 90,
     },
-    {
-      pattern: /apple\s*(app\s*store|music|icloud)|itunes|figma|notion/i,
-      category: "5020",
-      name: "Software Subscriptions",
-      confidence: 85,
-    },
-
-    // Transportation - NO AMOUNT LIMITS
+    // Transportation
     {
       pattern: /uber|lyft|taxi/i,
       category: "5040",
-      name: "Travel & Transportation",
       confidence: 95,
     },
-    {
-      pattern: /parking|airport|toll|gas|fuel|shell|exxon|bp|chevron/i,
-      category: "5040",
-      name: "Travel & Transportation",
-      confidence: 85,
-    },
-    {
-      pattern: /united|delta|american\s*airlines|southwest|jetblue/i,
-      category: "5040",
-      name: "Travel & Transportation",
-      confidence: 95,
-    },
-
-    // Food & Entertainment - NO AMOUNT LIMITS
+    // Food & Entertainment
     {
       pattern: /starbucks|dunkin|coffee/i,
       category: "5050",
-      name: "Meals & Entertainment",
       confidence: 90,
     },
     {
-      pattern: /restaurant|bistro|cafe|diner|eatery|dining|grill|kitchen/i,
+      pattern: /restaurant|bistro|cafe|diner|eatery/i,
       category: "5050",
-      name: "Meals & Entertainment",
-      confidence: 85,
-    },
-    {
-      pattern: /mcdonald|burger|pizza|kfc|subway|chipotle|taco\s*bell/i,
-      category: "5050",
-      name: "Meals & Entertainment",
-      confidence: 90,
-    },
-    {
-      pattern: /catering|food\s*delivery|doordash|grubhub|ubereats/i,
-      category: "5050",
-      name: "Meals & Entertainment",
-      confidence: 85,
-    },
-
-    // Office & Retail
-    {
-      pattern: /office\s*depot|staples|best\s*buy/i,
-      category: "5010",
-      name: "Office Supplies",
-      confidence: 90,
-    },
-    {
-      pattern: /walmart|target|costco/i,
-      category: "5010",
-      name: "Office Supplies",
-      confidence: 70,
-    },
-
-    // Professional Services
-    {
-      pattern: /lawyer|attorney|legal|law\s*firm/i,
-      category: "5060",
-      name: "Professional Services",
-      confidence: 95,
-    },
-    {
-      pattern: /accountant|cpa|bookkeep|tax\s*prep/i,
-      category: "5060",
-      name: "Professional Services",
-      confidence: 95,
-    },
-    {
-      pattern: /consultant|contractor|freelance/i,
-      category: "5060",
-      name: "Professional Services",
-      confidence: 80,
-    },
-
-    // Utilities & Communications
-    {
-      pattern: /verizon|at&t|comcast|sprint|t-mobile/i,
-      category: "5030",
-      name: "Internet & Phone",
-      confidence: 90,
-    },
-    {
-      pattern: /electric|gas|water|utility|power|energy/i,
-      category: "5080",
-      name: "Rent & Utilities",
-      confidence: 90,
-    },
-
-    // Marketing & Advertising
-    {
-      pattern: /facebook|instagram|linkedin|twitter|ads|advertising|marketing/i,
-      category: "5070",
-      name: "Marketing & Advertising",
-      confidence: 85,
-    },
-    {
-      pattern: /google\s*ads|facebook\s*ads|linkedin\s*ads/i,
-      category: "5070",
-      name: "Marketing & Advertising",
-      confidence: 95,
-    },
-
-    // Equipment & Technology
-    {
-      pattern: /dell|hp|lenovo|apple\s*store|computer|laptop|server/i,
-      category: "5100",
-      name: "Equipment & Technology",
-      confidence: 85,
-    },
-
-    // Training & Education
-    {
-      pattern:
-        /course|training|education|udemy|coursera|pluralsight|linkedin\s*learning/i,
-      category: "5120",
-      name: "Training & Education",
-      confidence: 90,
-    },
-
-    // Insurance
-    {
-      pattern: /insurance|coverage|policy|premium/i,
-      category: "5090",
-      name: "Insurance",
-      confidence: 85,
-    },
-
-    // Bank & Financial
-    {
-      pattern: /bank|fee|charge|interest|finance|loan/i,
-      category: "5130",
-      name: "Bank Fees",
-      confidence: 80,
-    },
-
-    // Hotels & Accommodation
-    {
-      pattern: /hotel|motel|inn|resort|lodging|accommodation/i,
-      category: "5040",
-      name: "Travel & Transportation",
       confidence: 85,
     },
   ];
 
-  // Check rules - NO AMOUNT-BASED LOGIC
+  // Check rules
   for (const rule of rules) {
     if (rule.pattern.test(vendorLower)) {
+      const category = await Category.findOne({
+        code: rule.category,
+        isActive: true,
+      });
+
       return {
         category: rule.category,
-        name: rule.name,
+        name: category ? category.name : "Unknown Category",
         confidence: rule.confidence,
         reason: `Matched vendor pattern: ${vendor}`,
-        alternatives: getAlternativeCategories(rule.category, 2),
+        alternatives: await getAlternativeCategories(rule.category, 2),
       };
     }
   }
 
-  // Improved fallback logic without amount restrictions
-  // Look for generic business indicators
-  if (/\b(llc|inc|corp|ltd|company|co\.)\b/i.test(vendorLower)) {
-    return {
-      category: "5060",
-      name: "Professional Services",
-      confidence: 60,
-      reason: "Business entity detected",
-      alternatives: getAlternativeCategories("5060", 3),
-    };
-  }
+  // Default fallback
+  const defaultCategory = await Category.findOne({
+    code: "5140",
+    isActive: true,
+  });
 
-  if (/\b(store|shop|market|retail)\b/i.test(vendorLower)) {
-    return {
-      category: "5010",
-      name: "Office Supplies",
-      confidence: 50,
-      reason: "Retail establishment detected",
-      alternatives: getAlternativeCategories("5010", 3),
-    };
-  }
-
-  // Default fallback - NO amount-based suggestions
   return {
     category: "5140",
-    name: "Miscellaneous Expenses",
+    name: defaultCategory ? defaultCategory.name : "Miscellaneous Expenses",
     confidence: 30,
     reason: "Unknown vendor - please select appropriate category",
-    alternatives: getAlternativeCategories("5140", 4),
+    alternatives: await getAlternativeCategories("5140", 4),
   };
 }
 
 /**
- * Get alternative category suggestions
+ * Get alternative category suggestions from database
  */
-function getAlternativeCategories(excludeCode, count = 2) {
-  const expenseCategories = defaultCategories
-    .filter((c) => c.code.startsWith("5") && c.code !== excludeCode)
-    .slice(0, count);
+async function getAlternativeCategories(excludeCode, count = 2) {
+  const expenseCategories = await Category.find({
+    code: /^5/,
+    code: { $ne: excludeCode },
+    isActive: true,
+  })
+    .limit(count)
+    .sort({ usageCount: -1 });
 
   return expenseCategories.map((c) => ({
     category: c.code,
@@ -694,4 +457,3 @@ function getAlternativeCategories(excludeCode, count = 2) {
 }
 
 module.exports = router;
-module.exports.defaultCategories = defaultCategories;

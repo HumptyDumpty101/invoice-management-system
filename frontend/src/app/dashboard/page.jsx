@@ -1,3 +1,4 @@
+// frontend/src/app/dashboard/page.jsx - UPDATED
 "use client";
 
 import { useState, useEffect } from "react";
@@ -30,6 +31,7 @@ import QuickStats from "../../components/dashboard/QuickStats";
 import InvoiceFilters from "../../components/dashboard/InvoiceFilters";
 import InvoiceList from "../../components/dashboard/InvoiceList";
 import BulkActions from "../../components/dashboard/BulkActions";
+import toast from "react-hot-toast";
 
 export default function DashboardPage() {
   const [invoices, setInvoices] = useState([]);
@@ -77,6 +79,7 @@ export default function DashboardPage() {
     } catch (err) {
       console.error("Failed to load dashboard data:", err);
       setError(err.message);
+      toast.error("Failed to load dashboard data");
     } finally {
       setLoading(false);
     }
@@ -112,8 +115,10 @@ export default function DashboardPage() {
   const handleExport = async () => {
     try {
       await exportInvoices(filters);
+      toast.success("Export completed successfully");
     } catch (err) {
       console.error("Export failed:", err);
+      toast.error("Export failed");
     }
   };
 
@@ -122,8 +127,45 @@ export default function DashboardPage() {
       // Implementation for bulk actions
       await loadData(); // Refresh data after bulk action
       setSelectedInvoices([]);
+      toast.success("Bulk action completed successfully");
     } catch (err) {
       console.error("Bulk action failed:", err);
+      toast.error("Bulk action failed");
+    }
+  };
+
+  // NEW: Handle individual invoice deletion
+  const handleInvoiceDeleted = async (deletedInvoiceId) => {
+    try {
+      // Remove the deleted invoice from the current list
+      setInvoices((prevInvoices) =>
+        prevInvoices.filter((invoice) => invoice._id !== deletedInvoiceId)
+      );
+
+      // Remove from selected invoices if it was selected
+      setSelectedInvoices((prevSelected) =>
+        prevSelected.filter((id) => id !== deletedInvoiceId)
+      );
+
+      // Update pagination total
+      setPagination((prev) => ({
+        ...prev,
+        total: Math.max(0, prev.total - 1),
+        pages: Math.ceil(Math.max(0, prev.total - 1) / prev.limit),
+      }));
+
+      // Refresh stats to reflect the deletion
+      try {
+        const statsData = await getDashboardStats();
+        setStats(statsData);
+      } catch (statsError) {
+        console.error("Failed to refresh stats:", statsError);
+        // Don't show error for stats refresh failure
+      }
+    } catch (error) {
+      console.error("Error handling invoice deletion:", error);
+      // Fallback: reload all data
+      loadData();
     }
   };
 
@@ -239,6 +281,7 @@ export default function DashboardPage() {
         onSelectAll={handleSelectAll}
         viewMode={viewMode}
         loading={loading}
+        onInvoiceDeleted={handleInvoiceDeleted}
       />
 
       {/* Pagination */}

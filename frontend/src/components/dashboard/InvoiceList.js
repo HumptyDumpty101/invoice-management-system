@@ -1,3 +1,4 @@
+// frontend/src/components/dashboard/InvoiceList.js - FIXED VERSION
 "use client";
 
 import { useState } from "react";
@@ -20,7 +21,9 @@ import {
   formatDate,
   getConfidenceColor,
   getConfidenceLevel,
+  deleteInvoice,
 } from "../../lib/api";
+import toast from "react-hot-toast";
 
 export default function InvoiceList({
   invoices,
@@ -29,8 +32,33 @@ export default function InvoiceList({
   onSelectAll,
   viewMode,
   loading,
+  onInvoiceDeleted, // Add this prop to refresh the list after deletion
 }) {
   const [actionMenuOpen, setActionMenuOpen] = useState(null);
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDeleteInvoice = async (invoiceId) => {
+    try {
+      setDeleting(true);
+      await deleteInvoice(invoiceId);
+      toast.success("Invoice deleted successfully");
+
+      // Close menus
+      setActionMenuOpen(null);
+      setDeleteConfirm(null);
+
+      // Refresh the invoice list
+      if (onInvoiceDeleted) {
+        onInvoiceDeleted(invoiceId);
+      }
+    } catch (error) {
+      console.error("Failed to delete invoice:", error);
+      toast.error(error.message || "Failed to delete invoice");
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   if (loading) {
     return <InvoiceListSkeleton />;
@@ -44,81 +72,105 @@ export default function InvoiceList({
         onSelectInvoice={onSelectInvoice}
         actionMenuOpen={actionMenuOpen}
         setActionMenuOpen={setActionMenuOpen}
+        onDeleteInvoice={handleDeleteInvoice}
+        deleteConfirm={deleteConfirm}
+        setDeleteConfirm={setDeleteConfirm}
+        deleting={deleting}
       />
     );
   }
 
   return (
-    <div className="card overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th scope="col" className="relative px-6 py-3">
-                <input
-                  type="checkbox"
-                  className="absolute left-4 top-1/2 -mt-2 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  checked={
-                    invoices.length > 0 &&
-                    selectedInvoices.length === invoices.length
-                  }
-                  onChange={onSelectAll}
+    <>
+      <div className="card overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th scope="col" className="relative px-6 py-3">
+                  <input
+                    type="checkbox"
+                    className="absolute left-4 top-1/2 -mt-2 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    checked={
+                      invoices.length > 0 &&
+                      selectedInvoices.length === invoices.length
+                    }
+                    onChange={onSelectAll}
+                  />
+                </th>
+                <th
+                  scope="col"
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                >
+                  Invoice Details
+                </th>
+                <th
+                  scope="col"
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                >
+                  Amount & Category
+                </th>
+                <th
+                  scope="col"
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                >
+                  Status
+                </th>
+                <th
+                  scope="col"
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                >
+                  Confidence
+                </th>
+                <th scope="col" className="relative px-6 py-3">
+                  <span className="sr-only">Actions</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {invoices.map((invoice) => (
+                <InvoiceRow
+                  key={invoice._id}
+                  invoice={invoice}
+                  isSelected={selectedInvoices.includes(invoice._id)}
+                  onSelect={() => onSelectInvoice(invoice._id)}
+                  actionMenuOpen={actionMenuOpen}
+                  setActionMenuOpen={setActionMenuOpen}
+                  onDeleteInvoice={handleDeleteInvoice}
+                  deleteConfirm={deleteConfirm}
+                  setDeleteConfirm={setDeleteConfirm}
+                  deleting={deleting}
                 />
-              </th>
-              <th
-                scope="col"
-                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-              >
-                Invoice Details
-              </th>
-              <th
-                scope="col"
-                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-              >
-                Amount & Category
-              </th>
-              <th
-                scope="col"
-                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-              >
-                Status
-              </th>
-              <th
-                scope="col"
-                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-              >
-                Confidence
-              </th>
-              <th scope="col" className="relative px-6 py-3">
-                <span className="sr-only">Actions</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {invoices.map((invoice) => (
-              <InvoiceRow
-                key={invoice._id}
-                invoice={invoice}
-                isSelected={selectedInvoices.includes(invoice._id)}
-                onSelect={() => onSelectInvoice(invoice._id)}
-                actionMenuOpen={actionMenuOpen}
-                setActionMenuOpen={setActionMenuOpen}
-              />
-            ))}
-          </tbody>
-        </table>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
-    </div>
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirm && (
+        <DeleteConfirmationModal
+          invoice={deleteConfirm}
+          onConfirm={() => handleDeleteInvoice(deleteConfirm._id)}
+          onCancel={() => setDeleteConfirm(null)}
+          isDeleting={deleting}
+        />
+      )}
+    </>
   );
 }
 
-// Individual Invoice Row Component
+// Individual Invoice Row Component - UPDATED
 function InvoiceRow({
   invoice,
   isSelected,
   onSelect,
   actionMenuOpen,
   setActionMenuOpen,
+  onDeleteInvoice,
+  deleteConfirm,
+  setDeleteConfirm,
+  deleting,
 }) {
   const confidenceColor = getConfidenceColor(
     invoice.validationStatus?.overallConfidence || 0
@@ -243,6 +295,7 @@ function InvoiceRow({
               <ActionMenu
                 invoice={invoice}
                 onClose={() => setActionMenuOpen(null)}
+                onDelete={() => setDeleteConfirm(invoice)}
               />
             )}
           </div>
@@ -252,13 +305,17 @@ function InvoiceRow({
   );
 }
 
-// Grid View Component
+// Grid View Component - UPDATED
 function InvoiceGridView({
   invoices,
   selectedInvoices,
   onSelectInvoice,
   actionMenuOpen,
   setActionMenuOpen,
+  onDeleteInvoice,
+  deleteConfirm,
+  setDeleteConfirm,
+  deleting,
 }) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -270,19 +327,21 @@ function InvoiceGridView({
           onSelect={() => onSelectInvoice(invoice._id)}
           actionMenuOpen={actionMenuOpen}
           setActionMenuOpen={setActionMenuOpen}
+          onDelete={() => setDeleteConfirm(invoice)}
         />
       ))}
     </div>
   );
 }
 
-// Invoice Card Component
+// Invoice Card Component - UPDATED
 function InvoiceCard({
   invoice,
   isSelected,
   onSelect,
   actionMenuOpen,
   setActionMenuOpen,
+  onDelete,
 }) {
   const confidenceColor = getConfidenceColor(
     invoice.validationStatus?.overallConfidence || 0
@@ -316,6 +375,7 @@ function InvoiceCard({
             <ActionMenu
               invoice={invoice}
               onClose={() => setActionMenuOpen(null)}
+              onDelete={onDelete}
             />
           )}
         </div>
@@ -383,12 +443,27 @@ function InvoiceCard({
   );
 }
 
-// Action Menu Component
-function ActionMenu({ invoice, onClose }) {
+// Action Menu Component - FIXED
+function ActionMenu({ invoice, onClose, onDelete }) {
   const handleAction = (action) => {
-    console.log(`Action: ${action} on invoice ${invoice._id}`);
+    switch (action) {
+      case "view":
+        window.open(`/invoice/${invoice._id}?view=true`, "_blank");
+        break;
+      case "edit":
+        window.open(`/invoice/${invoice._id}`, "_blank");
+        break;
+      case "duplicate":
+        // TODO: Implement duplicate functionality
+        console.log(`Duplicate invoice ${invoice._id}`);
+        break;
+      case "delete":
+        onDelete(); // This will trigger the delete confirmation modal
+        break;
+      default:
+        console.log(`Unknown action: ${action}`);
+    }
     onClose();
-    // Implement action logic here
   };
 
   return (
@@ -423,6 +498,76 @@ function ActionMenu({ invoice, onClose }) {
           <Trash2 className="w-4 h-4 inline mr-2" />
           Delete
         </button>
+      </div>
+    </div>
+  );
+}
+
+// Delete Confirmation Modal Component - NEW
+function DeleteConfirmationModal({ invoice, onConfirm, onCancel, isDeleting }) {
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+        <div className="flex items-center space-x-3 mb-4">
+          <div className="p-2 bg-red-100 rounded-full">
+            <AlertTriangle className="w-6 h-6 text-red-600" />
+          </div>
+          <h3 className="text-lg font-medium text-gray-900">Delete Invoice</h3>
+        </div>
+
+        <div className="mb-4">
+          <p className="text-sm text-gray-600 mb-2">
+            Are you sure you want to delete this invoice?
+          </p>
+          <div className="bg-gray-50 rounded-lg p-3">
+            <div className="text-sm">
+              <p className="font-medium text-gray-900">{invoice.vendor}</p>
+              <p className="text-gray-600">
+                {formatCurrency(invoice.amount)} • {formatDate(invoice.date)}
+              </p>
+              <p className="text-gray-500 text-xs">ID: {invoice._id}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+          <div className="flex items-start space-x-2">
+            <AlertTriangle className="w-4 h-4 text-red-600 mt-0.5" />
+            <div className="text-sm text-red-700">
+              <p className="font-medium">This action cannot be undone.</p>
+              <p>
+                The invoice and its associated file will be permanently deleted.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex space-x-3">
+          <button
+            onClick={onCancel}
+            disabled={isDeleting}
+            className="btn-outline flex-1 disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={isDeleting}
+            className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 disabled:opacity-50 flex-1 font-medium"
+          >
+            {isDeleting ? (
+              <>
+                <div className="spinner w-4 h-4 mr-2"></div>
+                Deleting...
+              </>
+            ) : (
+              <>
+                <Trash2 className="w-4 h-4 mr-2" />
+                Delete Invoice
+              </>
+            )}
+          </button>
+        </div>
       </div>
     </div>
   );
